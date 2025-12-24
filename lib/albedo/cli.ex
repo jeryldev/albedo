@@ -17,6 +17,14 @@ defmodule Albedo.CLI do
     |> run()
   end
 
+  defp halt_with_error(code) do
+    if Application.get_env(:albedo, :test_mode, false) do
+      throw({:cli_halt, code})
+    else
+      System.halt(code)
+    end
+  end
+
   defp parse_args(args) do
     {opts, args, invalid} =
       OptionParser.parse(args,
@@ -47,7 +55,7 @@ defmodule Albedo.CLI do
     cond do
       invalid != [] ->
         print_invalid_args(invalid)
-        System.halt(1)
+        halt_with_error(1)
 
       opts[:help] ->
         print_help()
@@ -91,7 +99,7 @@ defmodule Albedo.CLI do
   defp run_command([unknown | _], _opts) do
     print_error("Unknown command: #{unknown}")
     print_help()
-    System.halt(1)
+    halt_with_error(1)
   end
 
   defp cmd_init do
@@ -107,7 +115,7 @@ defmodule Albedo.CLI do
 
       {:error, reason} ->
         print_error("Failed to initialize: #{inspect(reason)}")
-        System.halt(1)
+        halt_with_error(1)
     end
   end
 
@@ -124,12 +132,12 @@ defmodule Albedo.CLI do
         "Usage: albedo analyze /path/to/codebase --task \"Description of what to build\""
       )
 
-      System.halt(1)
+      halt_with_error(1)
     end
 
     unless File.dir?(path) do
       print_error("Codebase not found at: #{path}")
-      System.halt(1)
+      halt_with_error(1)
     end
 
     print_info("Codebase: #{path}")
@@ -145,7 +153,7 @@ defmodule Albedo.CLI do
 
       {:error, reason} ->
         print_error("Analysis failed: #{inspect(reason)}")
-        System.halt(1)
+        halt_with_error(1)
     end
   end
 
@@ -155,7 +163,7 @@ defmodule Albedo.CLI do
 
     unless File.dir?(session_path) do
       print_error("Session not found at: #{session_path}")
-      System.halt(1)
+      halt_with_error(1)
     end
 
     print_info("Resuming session: #{session_path}")
@@ -169,7 +177,7 @@ defmodule Albedo.CLI do
 
       {:error, reason} ->
         print_error("Resume failed: #{inspect(reason)}")
-        System.halt(1)
+        halt_with_error(1)
     end
   end
 
@@ -229,7 +237,7 @@ defmodule Albedo.CLI do
 
     unless File.dir?(session_path) do
       print_error("Session not found: #{session_id}")
-      System.halt(1)
+      halt_with_error(1)
     end
 
     feature_file = Path.join(session_path, "FEATURE.md")
@@ -254,7 +262,7 @@ defmodule Albedo.CLI do
 
     unless File.dir?(session_path) do
       print_error("Session not found at: #{session_path}")
-      System.halt(1)
+      halt_with_error(1)
     end
 
     scope = opts[:scope] || "full"
@@ -270,12 +278,12 @@ defmodule Albedo.CLI do
 
       {:error, reason} ->
         print_error("Re-planning failed: #{inspect(reason)}")
-        System.halt(1)
+        halt_with_error(1)
     end
   end
 
   defp print_header do
-    IO.puts([
+    Owl.IO.puts([
       Owl.Data.tag("Albedo", :cyan),
       " ",
       Owl.Data.tag("v#{@version}", :light_black),
@@ -290,15 +298,15 @@ defmodule Albedo.CLI do
   end
 
   defp print_info(message) do
-    IO.puts(Owl.Data.tag(message, :light_black))
+    Owl.IO.puts(Owl.Data.tag(message, :light_black))
   end
 
   defp print_success(message) do
-    IO.puts(Owl.Data.tag("✓ #{message}", :green))
+    Owl.IO.puts(Owl.Data.tag("✓ #{message}", :green))
   end
 
   defp print_error(message) do
-    IO.puts(:stderr, Owl.Data.tag("✗ #{message}", :red))
+    Owl.IO.puts(Owl.Data.tag("✗ #{message}", :red))
   end
 
   defp print_session(id, state, task) do
@@ -310,7 +318,7 @@ defmodule Albedo.CLI do
         _ -> :light_black
       end
 
-    IO.puts([
+    Owl.IO.puts([
       Owl.Data.tag("  #{id}", :cyan),
       "  ",
       Owl.Data.tag("[#{state}]", state_color),
@@ -321,7 +329,7 @@ defmodule Albedo.CLI do
 
   defp print_summary(result) do
     IO.puts("")
-    IO.puts(Owl.Data.tag("Summary:", :cyan))
+    Owl.IO.puts(Owl.Data.tag("Summary:", :cyan))
 
     if result[:tickets_count] do
       IO.puts("  • #{result.tickets_count} tickets generated")
@@ -351,7 +359,7 @@ defmodule Albedo.CLI do
   end
 
   defp print_help do
-    IO.puts([
+    Owl.IO.puts([
       Owl.Data.tag("Albedo", :cyan),
       " - Codebase-to-Tickets CLI Tool\n\n",
       Owl.Data.tag("USAGE:", :yellow),

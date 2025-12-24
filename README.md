@@ -8,7 +8,9 @@
 
 ## What is Albedo?
 
-In astronomy, **albedo** measures how much light a surface reflects - the higher the albedo, the clearer and brighter the reflection. This project embodies that concept: **Albedo shines light on codebases**, helping you understand unfamiliar code and transform vague feature ideas into clear, actionable implementation plans.
+In alchemy, **albedo** (Latin for "whiteness") is the second stage of the *magnum opus* - the purification phase where **clarity emerges from chaos**. After the initial *nigredo* (decomposition), albedo represents the moment of illumination and understanding.
+
+This project embodies that concept: **Albedo brings clarity to codebases**, helping you understand unfamiliar code and transform vague feature ideas into clear, actionable implementation plans.
 
 Albedo acts as a **senior technical leader** that:
 - Investigates your codebase structure, conventions, and patterns

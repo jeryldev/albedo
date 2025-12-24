@@ -230,17 +230,17 @@ defmodule Albedo.Session.Worker do
   end
 
   defp print_phase_header(message) do
-    IO.puts(Owl.Data.tag("\n#{message}", :cyan))
+    Owl.IO.puts(Owl.Data.tag("\n#{message}", :cyan))
     IO.puts(String.duplicate("─", 50))
   end
 
   defp print_phase_start(phase) do
     phase_name = phase |> to_string() |> String.replace("_", " ") |> String.capitalize()
-    IO.puts(Owl.Data.tag("  ├─ #{phase_name}...", :light_black))
+    Owl.IO.puts(Owl.Data.tag("  ├─ #{phase_name}...", :light_black))
   end
 
   defp print_phase_complete(phase) do
     output_file = State.phase_output_file(phase)
-    IO.puts(Owl.Data.tag("  │  └─ ✓ Saved #{output_file}", :green))
+    Owl.IO.puts(Owl.Data.tag("  │  └─ ✓ Saved #{output_file}", :green))
   end
 end
