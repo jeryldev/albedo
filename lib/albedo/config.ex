@@ -85,10 +85,21 @@ defmodule Albedo.Config do
   end
 
   @doc """
+  Get the current LLM provider.
+  Priority: ALBEDO_PROVIDER env var > config.toml
+  """
+  def provider(config) do
+    case System.get_env("ALBEDO_PROVIDER") do
+      nil -> get(config, ["llm", "provider"])
+      provider -> provider
+    end
+  end
+
+  @doc """
   Get the API key for a provider from environment variables.
   """
-  def api_key(config, provider \\ nil) do
-    provider = provider || get(config, ["llm", "provider"])
+  def api_key(config, provider_override \\ nil) do
+    provider = provider_override || provider(config)
     env_var = get_api_key_env(config, provider)
     System.get_env(env_var)
   end
@@ -106,8 +117,8 @@ defmodule Albedo.Config do
   @doc """
   Get the model for a provider.
   """
-  def model(config, provider \\ nil) do
-    provider = provider || get(config, ["llm", "provider"])
+  def model(config, provider_override \\ nil) do
+    provider = provider_override || provider(config)
     primary_provider = get(config, ["llm", "provider"])
 
     if provider == primary_provider do

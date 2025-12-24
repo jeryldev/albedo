@@ -43,82 +43,21 @@ Albedo helps you plan projects from scratch:
 ### Installation
 
 ```bash
-# Clone the repository
+# Clone and install in one step
 git clone https://github.com/jeryldev/albedo.git
 cd albedo
-
-# Install dependencies
-mix deps.get
-
-# Build the CLI
-mix escript.build
-
-# Initialize configuration
-./albedo init
+./install.sh
 ```
 
-### Adding to PATH (Optional)
+The installer will:
+- Check for prerequisites (Elixir, ripgrep)
+- Build the CLI
+- Set up your API key and provider
+- Add `albedo` to your PATH
 
-To run `albedo` from anywhere instead of `./albedo`:
+**Tip:** Run `source install.sh` instead of `./install.sh` to auto-apply changes without restarting your terminal.
 
-#### macOS / Linux
-
-Add to your `~/.zshrc` or `~/.bashrc`:
-
-```bash
-# Option 1: Add the albedo directory to PATH
-export PATH="$PATH:/path/to/albedo"
-
-# Option 2: Or create a symlink to a directory already in PATH
-sudo ln -sf /path/to/albedo/albedo /usr/local/bin/albedo
-```
-
-Then reload your shell:
-```bash
-source ~/.zshrc  # or source ~/.bashrc
-```
-
-#### Windows (PowerShell)
-
-```powershell
-# Add to your PowerShell profile
-$env:Path += ";C:\path\to\albedo"
-
-# Or permanently add to system PATH (run as Administrator)
-[Environment]::SetEnvironmentVariable("Path", $env:Path + ";C:\path\to\albedo", "User")
-```
-
-#### Windows (Command Prompt)
-
-```cmd
-# Temporarily for current session
-set PATH=%PATH%;C:\path\to\albedo
-
-# Permanently (run as Administrator)
-setx PATH "%PATH%;C:\path\to\albedo"
-```
-
-After adding to PATH, you can run Albedo from anywhere:
-```bash
-albedo --help
-albedo analyze ~/projects/myapp --task "Add user authentication"
-```
-
-### Setting Up an API Key
-
-The easiest way is to let Albedo guide you through setup:
-
-```bash
-./albedo init
-```
-
-This will:
-1. Create the config file at `~/.albedo/config.toml`
-2. Ask which LLM provider you want to use
-3. Add your API key to your shell profile (`.zshrc` or `.bashrc`)
-4. Configure the selected provider automatically
-
-**Supported providers:**
+### Supported Providers
 
 | Provider | Get API Key | Free Tier |
 |----------|-------------|-----------|
@@ -127,24 +66,20 @@ This will:
 | OpenAI | [OpenAI Platform](https://platform.openai.com) | No |
 
 <details>
-<summary>Manual setup (alternative)</summary>
-
-Add your API key to `~/.zshrc` or `~/.bashrc`:
+<summary>Manual setup (without install.sh)</summary>
 
 ```bash
-export GEMINI_API_KEY="your-api-key-here"      # For Gemini (default)
-export ANTHROPIC_API_KEY="your-api-key-here"   # For Claude
-export OPENAI_API_KEY="your-api-key-here"      # For OpenAI
+# Build manually
+mix deps.get
+mix escript.build
+
+# Add to ~/.zshrc or ~/.bashrc
+export ALBEDO_PROVIDER="gemini"           # gemini | claude | openai
+export GEMINI_API_KEY="your-api-key"      # Your API key
+export PATH="$PATH:/path/to/albedo"       # Add to PATH
 ```
 
-Then reload: `source ~/.zshrc`
-
-To change provider, edit `~/.albedo/config.toml`:
-
-```toml
-[llm]
-provider = "claude"  # or "gemini" or "openai"
-```
+Then run: `source ~/.zshrc`
 
 </details>
 

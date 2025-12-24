@@ -29,7 +29,7 @@ defmodule Albedo.LLM.Client do
   """
   def chat(prompt, opts \\ []) do
     config = Config.load!()
-    provider = opts[:provider] || Config.get(config, ["llm", "provider"])
+    provider = opts[:provider] || Config.provider(config)
 
     case do_chat(config, provider, prompt, opts, 0) do
       {:ok, response} ->

@@ -112,180 +112,19 @@ defmodule Albedo.CLI do
 
   defp cmd_init do
     print_header()
-    print_info("Initializing Albedo configuration...")
+    print_info("For first-time setup, run: ./install.sh")
+    print_info("This command is for reconfiguration only.")
+    IO.puts("")
 
     case Config.init() do
       {:ok, config_file} ->
-        print_success("Configuration initialized!")
+        print_success("Config directory ready!")
         print_info("Config file: #{config_file}")
         print_info("Sessions dir: #{Config.sessions_dir()}")
-        IO.puts("")
-        maybe_setup_api_key()
 
       {:error, reason} ->
         print_error("Failed to initialize: #{inspect(reason)}")
         halt_with_error(1)
-    end
-  end
-
-  defp maybe_setup_api_key do
-    case prompt_yes_no("Would you like to set up an API key now?", true) do
-      true -> setup_api_key()
-      false -> print_info("You can set up an API key later by running 'albedo init' again.")
-    end
-  end
-
-  defp setup_api_key do
-    IO.puts("")
-    print_info("Albedo supports: Gemini (free tier), Claude, and OpenAI")
-    IO.puts("")
-
-    provider = prompt_provider()
-    {env_var, get_key_url} = provider_info(provider)
-
-    IO.puts("")
-    print_info("Get your API key from: #{get_key_url}")
-    IO.puts("")
-
-    case prompt_string("Enter your #{provider} API key (or press Enter to skip)") do
-      "" ->
-        print_info("Skipped. You can add the API key to your shell profile later:")
-        print_info("  export #{env_var}=\"your-api-key\"")
-
-      api_key ->
-        add_api_key_to_shell(env_var, api_key, provider)
-    end
-  end
-
-  defp prompt_provider do
-    IO.puts("Select a provider:")
-    IO.puts("  1. Gemini (recommended - free tier available)")
-    IO.puts("  2. Claude")
-    IO.puts("  3. OpenAI")
-    IO.puts("")
-
-    case prompt_string("Enter choice [1]") do
-      "" -> "Gemini"
-      "1" -> "Gemini"
-      "2" -> "Claude"
-      "3" -> "OpenAI"
-      _ -> prompt_provider()
-    end
-  end
-
-  defp provider_info("Gemini"), do: {"GEMINI_API_KEY", "https://aistudio.google.com"}
-  defp provider_info("Claude"), do: {"ANTHROPIC_API_KEY", "https://console.anthropic.com"}
-  defp provider_info("OpenAI"), do: {"OPENAI_API_KEY", "https://platform.openai.com"}
-
-  defp add_api_key_to_shell(env_var, api_key, provider) do
-    shell_profile = detect_shell_profile()
-    export_line = "export #{env_var}=\"#{api_key}\""
-
-    IO.puts("")
-    print_info("The following line will be added to #{shell_profile}:")
-    IO.puts("")
-    Owl.IO.puts(Owl.Data.tag("  #{export_line}", :cyan))
-    IO.puts("")
-
-    case prompt_yes_no("Proceed?", true) do
-      true ->
-        case append_to_shell_profile(shell_profile, env_var, export_line) do
-          :ok ->
-            update_config_provider(provider)
-            IO.puts("")
-            print_success("API key added to #{shell_profile}")
-            IO.puts("")
-            print_info("To use it now, run:")
-            Owl.IO.puts(Owl.Data.tag("  source #{shell_profile}", :cyan))
-            IO.puts("")
-            print_info("Or restart your terminal.")
-
-          {:already_exists, _} ->
-            print_info("#{env_var} already exists in #{shell_profile}. Skipping.")
-
-          {:error, reason} ->
-            print_error("Failed to write to #{shell_profile}: #{inspect(reason)}")
-            print_info("You can add it manually:")
-            print_info("  echo '#{export_line}' >> #{shell_profile}")
-        end
-
-      false ->
-        print_info("Skipped. You can add it manually:")
-        print_info("  echo '#{export_line}' >> #{shell_profile}")
-    end
-  end
-
-  defp detect_shell_profile do
-    home = System.get_env("HOME") || "~"
-    zshrc = Path.join(home, ".zshrc")
-    bashrc = Path.join(home, ".bashrc")
-    bash_profile = Path.join(home, ".bash_profile")
-
-    cond do
-      File.exists?(zshrc) -> zshrc
-      File.exists?(bashrc) -> bashrc
-      File.exists?(bash_profile) -> bash_profile
-      true -> zshrc
-    end
-  end
-
-  defp append_to_shell_profile(path, env_var, export_line) do
-    case File.read(path) do
-      {:ok, content} ->
-        if String.contains?(content, env_var) do
-          {:already_exists, path}
-        else
-          line_to_add = "\n# Added by Albedo\n#{export_line}\n"
-          File.write(path, content <> line_to_add)
-        end
-
-      {:error, :enoent} ->
-        line_to_add = "# Added by Albedo\n#{export_line}\n"
-        File.write(path, line_to_add)
-
-      {:error, reason} ->
-        {:error, reason}
-    end
-  end
-
-  defp update_config_provider(provider) do
-    provider_key =
-      case provider do
-        "Gemini" -> "gemini"
-        "Claude" -> "claude"
-        "OpenAI" -> "openai"
-      end
-
-    config_file = Config.config_file()
-
-    case File.read(config_file) do
-      {:ok, content} ->
-        updated =
-          String.replace(content, ~r/provider = "[^"]*"/, "provider = \"#{provider_key}\"")
-
-        File.write(config_file, updated)
-
-      _ ->
-        :ok
-    end
-  end
-
-  defp prompt_yes_no(question, default) do
-    default_hint = if default, do: "Y/n", else: "y/N"
-
-    case prompt_string("#{question} [#{default_hint}]") do
-      "" -> default
-      input -> String.downcase(input) in ["y", "yes"]
-    end
-  end
-
-  defp prompt_string(prompt) do
-    IO.write("#{prompt}: ")
-
-    case IO.read(:stdio, :line) do
-      {:error, _} -> ""
-      :eof -> ""
-      line -> String.trim(line)
     end
   end
 
