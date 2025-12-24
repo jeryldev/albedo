@@ -680,10 +680,18 @@ defmodule Albedo.LLM.Prompts do
   end
 
   defp format_codebase_info(info) when is_map(info) do
-    Enum.map_join(info, "\n\n", fn {key, value} -> "#{key}:\n#{value}" end)
+    Enum.map_join(info, "\n\n", fn {key, value} ->
+      formatted_value = format_value(value)
+      "#{key}:\n#{formatted_value}"
+    end)
   end
 
   defp format_codebase_info(info), do: inspect(info)
+
+  defp format_value(value) when is_binary(value), do: value
+  defp format_value(value) when is_list(value), do: Enum.join(value, ", ")
+  defp format_value(value) when is_map(value), do: inspect(value, pretty: true)
+  defp format_value(value), do: inspect(value)
 
   defp format_context(nil), do: "No previous context available."
 

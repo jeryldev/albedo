@@ -45,19 +45,15 @@ defmodule Albedo.Agents.ImpactTracer do
     feature_location = context[:feature_location] || %{}
     search_results = feature_location[:search_results] || %{}
 
-    files = []
-
-    files =
-      (files ++
-         (search_results[:keyword_matches] || []))
+    keyword_files =
+      (search_results[:keyword_matches] || [])
       |> Enum.map(& &1.file)
 
-    files =
-      (files ++
-         (search_results[:schemas] || []))
+    schema_files =
+      (search_results[:schemas] || [])
       |> Enum.map(& &1.file)
 
-    files
+    (keyword_files ++ schema_files)
     |> Enum.uniq()
     |> Enum.take(20)
   end

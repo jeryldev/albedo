@@ -327,7 +327,14 @@ defmodule Albedo.Session.State do
   defp generate_id(task) do
     date = Date.utc_today() |> Date.to_iso8601()
     slug = task |> String.downcase() |> String.slice(0, 30) |> slugify()
-    "#{date}_#{slug}"
+
+    suffix =
+      :erlang.unique_integer([:positive])
+      |> rem(10000)
+      |> Integer.to_string()
+      |> String.pad_leading(4, "0")
+
+    "#{date}_#{slug}_#{suffix}"
   end
 
   defp slugify(string) do
