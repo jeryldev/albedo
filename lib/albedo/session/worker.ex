@@ -21,6 +21,22 @@ defmodule Albedo.Session.Worker do
     change_planning: Albedo.Agents.ChangePlanner
   }
 
+  @phase_dependencies %{
+    domain_research: [],
+    tech_stack: [:domain_research],
+    architecture: [:domain_research, :tech_stack],
+    conventions: [:domain_research, :tech_stack, :architecture],
+    feature_location: [:domain_research, :tech_stack, :architecture, :conventions],
+    impact_analysis: [
+      :domain_research,
+      :tech_stack,
+      :architecture,
+      :conventions,
+      :feature_location
+    ],
+    change_planning: :all
+  }
+
   def start_link({codebase_path, task, opts}) do
     GenServer.start_link(__MODULE__, {:new, codebase_path, task, opts})
   end
@@ -162,69 +178,31 @@ defmodule Albedo.Session.Worker do
   end
 
   defp build_agent_context(state, phase) do
-    greenfield_context =
-      if state.context[:greenfield] do
-        %{
-          greenfield: true,
-          project_name: state.context[:project_name],
-          stack: state.context[:stack],
-          database: state.context[:database]
-        }
-      else
-        %{}
-      end
-
-    base_context =
-      case phase do
-        :domain_research ->
-          %{task: state.task}
-
-        :tech_stack ->
-          %{
-            task: state.task,
-            domain_research: state.context[:domain_research]
-          }
-
-        :architecture ->
-          %{
-            task: state.task,
-            domain_research: state.context[:domain_research],
-            tech_stack: state.context[:tech_stack]
-          }
-
-        :conventions ->
-          %{
-            task: state.task,
-            domain_research: state.context[:domain_research],
-            tech_stack: state.context[:tech_stack],
-            architecture: state.context[:architecture]
-          }
-
-        :feature_location ->
-          %{
-            task: state.task,
-            domain_research: state.context[:domain_research],
-            tech_stack: state.context[:tech_stack],
-            architecture: state.context[:architecture],
-            conventions: state.context[:conventions]
-          }
-
-        :impact_analysis ->
-          %{
-            task: state.task,
-            domain_research: state.context[:domain_research],
-            tech_stack: state.context[:tech_stack],
-            architecture: state.context[:architecture],
-            conventions: state.context[:conventions],
-            feature_location: state.context[:feature_location]
-          }
-
-        :change_planning ->
-          state.context
-      end
-
+    base_context = build_phase_context(state, phase)
+    greenfield_context = build_greenfield_context(state)
     Map.merge(greenfield_context, base_context)
   end
+
+  defp build_phase_context(state, :change_planning), do: state.context
+
+  defp build_phase_context(state, phase) do
+    deps = @phase_dependencies[phase]
+
+    Enum.reduce(deps, %{task: state.task}, fn dep, acc ->
+      Map.put(acc, dep, state.context[dep])
+    end)
+  end
+
+  defp build_greenfield_context(%{context: %{greenfield: true} = context}) do
+    %{
+      greenfield: true,
+      project_name: context[:project_name],
+      stack: context[:stack],
+      database: context[:database]
+    }
+  end
+
+  defp build_greenfield_context(_state), do: %{}
 
   defp finalize_session(state) do
     header =

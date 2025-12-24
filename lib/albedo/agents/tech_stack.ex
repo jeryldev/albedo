@@ -9,6 +9,14 @@ defmodule Albedo.Agents.TechStack do
   alias Albedo.LLM.Prompts
   alias Albedo.Search.{FileScanner, PatternMatcher}
 
+  @max_tree_depth 3
+  @max_package_content 2000
+  @max_config_content 1000
+  @greenfield_max_tokens 8192
+
+  @package_files ~w(mix.exs package.json requirements.txt pyproject.toml Gemfile go.mod Cargo.toml)
+  @config_patterns ~w(config/*.exs config.exs .tool-versions .env.example docker-compose.yml Dockerfile)
+
   @impl Albedo.Agents.Base
   def investigate(state) do
     context = state.context
@@ -26,7 +34,7 @@ defmodule Albedo.Agents.TechStack do
 
     prompt = Prompts.tech_stack(task, %{}, context)
 
-    case call_llm(prompt, max_tokens: 8192) do
+    case call_llm(prompt, max_tokens: @greenfield_max_tokens) do
       {:ok, response} ->
         findings = %{
           greenfield: true,
@@ -48,7 +56,7 @@ defmodule Albedo.Agents.TechStack do
 
     with {:ok, file_stats} <- FileScanner.count_by_language(path),
          {:ok, files} <- FileScanner.list_files(path),
-         {:ok, tree} <- FileScanner.tree(path, max_depth: 3),
+         {:ok, tree} <- FileScanner.tree(path, max_depth: @max_tree_depth),
          {:ok, project_type} <- FileScanner.detect_project_type(path) do
       package_contents = read_package_files(path)
       config_contents = read_config_files(path)
@@ -104,71 +112,48 @@ defmodule Albedo.Agents.TechStack do
   end
 
   defp read_package_files(path) do
-    package_files = [
-      "mix.exs",
-      "package.json",
-      "requirements.txt",
-      "pyproject.toml",
-      "Gemfile",
-      "go.mod",
-      "Cargo.toml"
-    ]
-
-    package_files
-    |> Enum.map(fn file ->
-      full_path = Path.join(path, file)
-
-      case File.read(full_path) do
-        {:ok, content} -> {file, content}
-        _ -> nil
-      end
-    end)
-    |> Enum.reject(&is_nil/1)
-    |> Enum.map(fn {_, content} -> content end)
+    @package_files
+    |> Enum.flat_map(&read_file_content(path, &1))
   end
 
   defp read_config_files(path) do
-    config_patterns = [
-      "config/*.exs",
-      "config.exs",
-      ".tool-versions",
-      ".env.example",
-      "docker-compose.yml",
-      "Dockerfile"
-    ]
-
-    config_patterns
-    |> Enum.flat_map(fn pattern ->
-      Path.wildcard(Path.join(path, pattern))
-    end)
-    |> Enum.map(fn file ->
-      case File.read(file) do
-        {:ok, content} -> content
-        _ -> nil
-      end
-    end)
-    |> Enum.reject(&is_nil/1)
+    @config_patterns
+    |> Enum.flat_map(fn pattern -> Path.wildcard(Path.join(path, pattern)) end)
+    |> Enum.flat_map(&read_file/1)
   end
 
-  defp extract_dependencies(_path, package_contents) do
-    mix_content =
-      package_contents
-      |> Enum.find(fn content ->
-        String.contains?(content, "defmodule") and String.contains?(content, "MixProject")
-      end)
-
-    if mix_content do
-      PatternMatcher.extract_mix_deps(mix_content)
-    else
-      []
+  defp read_file_content(path, file) do
+    case File.read(Path.join(path, file)) do
+      {:ok, content} -> [content]
+      _ -> []
     end
   end
 
+  defp read_file(file) do
+    case File.read(file) do
+      {:ok, content} -> [content]
+      _ -> []
+    end
+  end
+
+  defp extract_dependencies(_path, package_contents) do
+    package_contents
+    |> Enum.find(&mix_project_content?/1)
+    |> case do
+      nil -> []
+      content -> PatternMatcher.extract_mix_deps(content)
+    end
+  end
+
+  defp mix_project_content?(content) do
+    String.contains?(content, "defmodule") and String.contains?(content, "MixProject")
+  end
+
   defp summarize_package_files(contents) do
-    Enum.map_join(contents, "\n---\n", &String.slice(&1, 0, 2000))
+    Enum.map_join(contents, "\n---\n", &String.slice(&1, 0, @max_package_content))
   end
 
   defp summarize_config_files(contents) do
-    Enum.map_join(contents, "\n---\n", &String.slice(&1, 0, 1000))
+    Enum.map_join(contents, "\n---\n", &String.slice(&1, 0, @max_config_content))
   end
 end

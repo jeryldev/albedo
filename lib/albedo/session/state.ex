@@ -330,7 +330,7 @@ defmodule Albedo.Session.State do
 
     suffix =
       :erlang.unique_integer([:positive])
-      |> rem(10000)
+      |> rem(10_000)
       |> Integer.to_string()
       |> String.pad_leading(4, "0")
 

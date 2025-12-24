@@ -9,6 +9,10 @@ defmodule Albedo.Agents.Architecture do
   alias Albedo.LLM.Prompts
   alias Albedo.Search.{FileScanner, Ripgrep}
 
+  @max_tree_depth 4
+  @max_routes 20
+  @greenfield_max_tokens 8192
+
   @impl Albedo.Agents.Base
   def investigate(state) do
     context = state.context
@@ -26,7 +30,7 @@ defmodule Albedo.Agents.Architecture do
 
     prompt = Prompts.architecture(task, context)
 
-    case call_llm(prompt, max_tokens: 8192) do
+    case call_llm(prompt, max_tokens: @greenfield_max_tokens) do
       {:ok, response} ->
         findings = %{
           greenfield: true,
@@ -45,7 +49,7 @@ defmodule Albedo.Agents.Architecture do
     task = state.task
     previous_context = state.context
 
-    with {:ok, tree} <- FileScanner.tree(path, max_depth: 4),
+    with {:ok, tree} <- FileScanner.tree(path, max_depth: @max_tree_depth),
          {:ok, project_type} <- FileScanner.detect_project_type(path) do
       structure_info = analyze_structure(path, project_type)
 
@@ -233,7 +237,7 @@ defmodule Albedo.Agents.Architecture do
             routes =
               Regex.scan(~r/(get|post|put|patch|delete|live)\s+["']([^"']+)["']/, content)
               |> Enum.map(fn [_, method, path] -> {method, path} end)
-              |> Enum.take(20)
+              |> Enum.take(@max_routes)
 
             entry_points ++ [{:router, routes}]
 
