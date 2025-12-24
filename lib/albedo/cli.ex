@@ -421,17 +421,19 @@ defmodule Albedo.CLI do
       IO.puts("  • #{result.total_points} story points estimated")
     end
 
-    if result[:files_to_create] do
+    if result[:files_to_create] && result[:files_to_create] > 0 do
       IO.puts("  • #{result.files_to_create} files to create")
     end
 
-    if result[:files_to_modify] do
+    if result[:files_to_modify] && result[:files_to_modify] > 0 do
       IO.puts("  • #{result.files_to_modify} files to modify")
     end
 
-    if result[:risks_identified] do
+    if result[:risks_identified] && result[:risks_identified] > 0 do
       IO.puts("  • #{result.risks_identified} risks identified")
     end
+
+    print_next_steps(result)
   end
 
   defp print_greenfield_summary(result) do
@@ -454,9 +456,19 @@ defmodule Albedo.CLI do
       IO.puts("  • Recommended stack: #{result.recommended_stack}")
     end
 
-    if result[:setup_steps] do
+    if result[:setup_steps] && result[:setup_steps] > 0 do
       IO.puts("  • #{result.setup_steps} setup steps")
     end
+
+    print_next_steps(result)
+  end
+
+  defp print_next_steps(result) do
+    IO.puts("")
+    Owl.IO.puts(Owl.Data.tag("Next Steps:", :cyan))
+    IO.puts("  1. View the plan:        cat #{result.output_path}")
+    IO.puts("  2. Go to session folder: cd #{Path.dirname(result.output_path)}")
+    IO.puts("  3. View in CLI:          albedo show #{result.session_id}")
   end
 
   defp print_invalid_args(invalid) do

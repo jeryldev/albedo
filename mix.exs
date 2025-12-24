@@ -18,7 +18,18 @@ defmodule Albedo.MixProject do
       description: "Codebase-to-tickets CLI tool for systematic code analysis",
       package: package(),
       docs: docs(),
-      aliases: aliases()
+      aliases: aliases(),
+      test_coverage: [tool: ExCoveralls]
+    ]
+  end
+
+  def cli do
+    [
+      preferred_envs: [
+        coveralls: :test,
+        "coveralls.detail": :test,
+        "coveralls.html": :test
+      ]
     ]
   end
 
@@ -40,6 +51,7 @@ defmodule Albedo.MixProject do
       {:req, "~> 0.5"},
       {:ex_doc, "~> 0.34", only: :dev, runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
+      {:excoveralls, "~> 0.18", only: :test},
       {:mox, "~> 1.1", only: :test}
     ]
   end

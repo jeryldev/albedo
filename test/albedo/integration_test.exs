@@ -3,7 +3,7 @@ defmodule Albedo.IntegrationTest do
 
   import ExUnit.CaptureIO
 
-  alias Albedo.{Config, CLI}
+  alias Albedo.{CLI, Config}
   alias Albedo.Search.{FileScanner, Ripgrep}
   alias Albedo.Session.State
   alias Albedo.TestSupport.Mocks
@@ -167,30 +167,47 @@ defmodule Albedo.IntegrationTest do
       assert state.context[:database] == "postgres"
     end
 
-    test "greenfield skips code analysis phases", %{dir: dir} do
+    test "greenfield skips code-specific phases but keeps planning phases", %{dir: dir} do
       state = State.new_greenfield("my_app", "Build an API", [])
       state = %{state | session_dir: dir}
 
-      assert state.phases[:tech_stack].status == :skipped
-      assert state.phases[:architecture].status == :skipped
+      # Planning phases are active for greenfield
+      assert state.phases[:domain_research].status == :pending
+      assert state.phases[:tech_stack].status == :pending
+      assert state.phases[:architecture].status == :pending
+      assert state.phases[:change_planning].status == :pending
+
+      # Code-specific phases are skipped (require existing codebase)
       assert state.phases[:conventions].status == :skipped
       assert state.phases[:feature_location].status == :skipped
       assert state.phases[:impact_analysis].status == :skipped
-
-      assert state.phases[:domain_research].status == :pending
-      assert state.phases[:change_planning].status == :pending
     end
 
-    test "greenfield phase progression skips analysis phases", %{dir: dir} do
+    test "greenfield phase progression includes planning phases", %{dir: dir} do
       state = State.new_greenfield("my_app", "Build an API", [])
       state = %{state | session_dir: dir}
 
+      # Greenfield progression: domain_research -> tech_stack -> architecture -> change_planning
       assert State.first_incomplete_phase(state) == :domain_research
 
       state =
         state
         |> State.start_phase(:domain_research)
         |> State.complete_phase(:domain_research, %{domain: "API development"})
+
+      assert State.first_incomplete_phase(state) == :tech_stack
+
+      state =
+        state
+        |> State.start_phase(:tech_stack)
+        |> State.complete_phase(:tech_stack, %{stack: "phoenix"})
+
+      assert State.first_incomplete_phase(state) == :architecture
+
+      state =
+        state
+        |> State.start_phase(:architecture)
+        |> State.complete_phase(:architecture, %{design: "clean architecture"})
 
       assert State.first_incomplete_phase(state) == :change_planning
 
@@ -212,7 +229,10 @@ defmodule Albedo.IntegrationTest do
 
       assert loaded_state.codebase_path == nil
       assert loaded_state.task == "Build a CLI tool"
-      assert loaded_state.phases[:tech_stack].status == :skipped
+      # Tech stack is active for greenfield (pending, not skipped)
+      assert loaded_state.phases[:tech_stack].status == :pending
+      # Code-specific phases are skipped
+      assert loaded_state.phases[:conventions].status == :skipped
     end
   end
 

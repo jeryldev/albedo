@@ -46,8 +46,8 @@ defmodule Albedo.LLM.Claude do
         ]
       }
 
-      # 10 minute timeout for LLM requests
-      case Req.post(url, json: body, headers: headers, receive_timeout: 600_000) do
+      # Long timeout for LLM requests (10 minutes)
+      case Req.post(url, json: body, headers: headers, receive_timeout: 600_000, retry: false) do
         {:ok, %{status: 200, body: response_body}} ->
           parse_response(response_body)
 

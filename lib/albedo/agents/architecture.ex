@@ -11,6 +11,36 @@ defmodule Albedo.Agents.Architecture do
 
   @impl Albedo.Agents.Base
   def investigate(state) do
+    context = state.context
+
+    if context[:greenfield] do
+      investigate_greenfield(state)
+    else
+      investigate_existing(state)
+    end
+  end
+
+  defp investigate_greenfield(state) do
+    task = state.task
+    context = state.context
+
+    prompt = Prompts.architecture(task, context)
+
+    case call_llm(prompt, max_tokens: 8192) do
+      {:ok, response} ->
+        findings = %{
+          greenfield: true,
+          content: response
+        }
+
+        {:ok, findings}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  defp investigate_existing(state) do
     path = state.codebase_path
     task = state.task
     previous_context = state.context

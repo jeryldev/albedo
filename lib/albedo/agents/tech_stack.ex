@@ -11,6 +11,38 @@ defmodule Albedo.Agents.TechStack do
 
   @impl Albedo.Agents.Base
   def investigate(state) do
+    context = state.context
+
+    if context[:greenfield] do
+      investigate_greenfield(state)
+    else
+      investigate_existing(state)
+    end
+  end
+
+  defp investigate_greenfield(state) do
+    task = state.task
+    context = state.context
+
+    prompt = Prompts.tech_stack(task, %{}, context)
+
+    case call_llm(prompt, max_tokens: 8192) do
+      {:ok, response} ->
+        findings = %{
+          greenfield: true,
+          recommended_stack: context[:stack],
+          database: context[:database],
+          content: response
+        }
+
+        {:ok, findings}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  defp investigate_existing(state) do
     path = state.codebase_path
     task = state.task
 

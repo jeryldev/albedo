@@ -6,12 +6,15 @@ defmodule Albedo.LLM.Prompts do
   @doc """
   Generate prompt for domain research phase.
   """
-  def domain_research(task) do
+  def domain_research(task, context \\ %{}) do
+    greenfield_section = format_greenfield_context(context)
+
     """
     You are a domain expert helping a software development team understand the business domain for a task.
 
     TASK DESCRIPTION:
     #{task}
+    #{greenfield_section}
 
     INSTRUCTIONS:
     Analyze the task and identify the relevant domain knowledge needed to implement it correctly.
@@ -63,9 +66,77 @@ defmodule Albedo.LLM.Prompts do
   end
 
   @doc """
-  Generate prompt for tech stack analysis.
+  Generate prompt for tech stack analysis or recommendation.
   """
-  def tech_stack(task, codebase_info) do
+  def tech_stack(task, codebase_info, context \\ %{})
+
+  def tech_stack(task, _codebase_info, %{greenfield: true} = context) do
+    greenfield_section = format_greenfield_context(context)
+
+    """
+    You are a senior software engineer recommending the optimal technology stack for a new project.
+
+    TASK DESCRIPTION:
+    #{task}
+    #{greenfield_section}
+
+    INSTRUCTIONS:
+    Based on the project requirements, recommend the best technology stack.
+    Consider the specified stack preference if provided, but also explain alternatives.
+
+    RESPONSE FORMAT:
+    Respond in valid Markdown format with the following structure:
+
+    # Tech Stack Recommendation
+
+    ## Recommended Stack
+
+    ### Primary Language
+    - **Language:** [Language name]
+    - **Version:** [Recommended version]
+    - **Why:** [Justification]
+
+    ### Core Framework/Libraries
+    | Name | Version | Purpose | Why Chosen |
+    |------|---------|---------|------------|
+    | [Name] | [Version] | [Purpose] | [Justification] |
+
+    ### Build Tools
+    | Tool | Purpose |
+    |------|---------|
+    | [Tool] | [Purpose] |
+
+    ## Database (if applicable)
+    - **Type:** [Database type]
+    - **Why:** [Justification]
+    - **Alternatives:** [Other options considered]
+
+    ## Project Structure
+    ```
+    [Recommended directory structure]
+    ```
+
+    ## Development Tools
+    - **Formatter:** [Tool]
+    - **Linter:** [Tool]
+    - **Testing:** [Framework]
+
+    ## Dependencies to Install
+    ```
+    [Package manager commands to set up the project]
+    ```
+
+    ## Alternatives Considered
+    | Alternative | Pros | Cons | When to Choose |
+    |-------------|------|------|----------------|
+    | [Alt stack] | [Pros] | [Cons] | [Use case] |
+
+    ## Getting Started
+    [Step-by-step commands to initialize the project]
+    """
+  end
+
+  def tech_stack(task, codebase_info, _context) do
     """
     You are a senior software engineer analyzing a codebase's technology stack.
 
@@ -126,8 +197,92 @@ defmodule Albedo.LLM.Prompts do
   end
 
   @doc """
-  Generate prompt for architecture analysis.
+  Generate prompt for architecture analysis or planning.
   """
+  def architecture(task, context)
+
+  def architecture(task, %{greenfield: true} = context) do
+    greenfield_section = format_greenfield_context(context)
+    tech_stack_info = format_tech_stack_context(context)
+
+    """
+    You are a software architect designing the architecture for a new project.
+
+    TASK DESCRIPTION:
+    #{task}
+    #{greenfield_section}
+
+    TECH STACK:
+    #{tech_stack_info}
+
+    INSTRUCTIONS:
+    Design a clean, scalable architecture for this new project.
+    Consider best practices for the chosen tech stack.
+
+    RESPONSE FORMAT:
+    Respond in valid Markdown format with the following structure:
+
+    # Architecture Design
+
+    ## Overview
+    [High-level description of the architecture approach]
+
+    ## Application Type
+    - **Pattern:** [Monolith / Microservices / Serverless / CLI]
+    - **Style:** [MVC / Clean Architecture / Hexagonal / etc.]
+    - **Justification:** [Why this approach]
+
+    ## Module Structure
+
+    ### Core Modules
+    | Module | Purpose | Dependencies |
+    |--------|---------|--------------|
+    | [Module] | [Purpose] | [Dependencies] |
+
+    ### Proposed Directory Layout
+    ```
+    [Directory tree structure]
+    ```
+
+    ## Data Flow
+
+    ### Entry Points
+    - [Entry point 1: description]
+    - [Entry point 2: description]
+
+    ### Data Models
+    | Model | Fields | Purpose |
+    |-------|--------|---------|
+    | [Model] | [Key fields] | [Purpose] |
+
+    ## Architecture Diagram
+
+    ```mermaid
+    graph TD
+        [Architecture components and relationships]
+    ```
+
+    ## Key Design Decisions
+
+    ### [Decision 1]
+    - **Choice:** [What was chosen]
+    - **Alternatives:** [What was considered]
+    - **Rationale:** [Why this choice]
+
+    ### [Decision 2]
+    [Continue for key decisions]
+
+    ## Extensibility Points
+    - [Where the architecture can be extended]
+    - [Future considerations]
+
+    ## Testing Strategy
+    - **Unit Tests:** [Approach]
+    - **Integration Tests:** [Approach]
+    - **E2E Tests:** [If applicable]
+    """
+  end
+
   def architecture(task, context) do
     """
     You are a software architect analyzing a codebase's structure.
@@ -402,11 +557,14 @@ defmodule Albedo.LLM.Prompts do
   Generate prompt for change planning (ticket generation).
   """
   def change_planning(task, context) do
+    greenfield_section = format_greenfield_context(context)
+
     """
     You are a senior technical lead creating implementation tickets for a development team.
 
     TASK DESCRIPTION:
     #{task}
+    #{greenfield_section}
 
     FULL CONTEXT:
     #{format_full_context(context)}
@@ -575,4 +733,54 @@ defmodule Albedo.LLM.Prompts do
   end
 
   defp summarize_context(value), do: inspect(value, limit: 500)
+
+  defp format_tech_stack_context(context) when is_map(context) do
+    case context[:tech_stack] do
+      %{content: content} when is_binary(content) ->
+        content
+
+      _ ->
+        if context[:stack] do
+          "Preferred stack: #{context[:stack]}"
+        else
+          "No tech stack specified"
+        end
+    end
+  end
+
+  defp format_tech_stack_context(_), do: "No tech stack information available"
+
+  defp format_greenfield_context(context) when is_map(context) do
+    if context[:greenfield] do
+      parts = []
+
+      parts =
+        if context[:project_name],
+          do: ["Project Name: #{context[:project_name]}" | parts],
+          else: parts
+
+      parts =
+        if context[:stack],
+          do: [
+            "Tech Stack: #{context[:stack]} (IMPORTANT: Use this stack, not any mentioned in the task)"
+            | parts
+          ],
+          else: parts
+
+      parts =
+        if context[:database],
+          do: ["Database: #{context[:database]}" | parts],
+          else: parts
+
+      if parts != [] do
+        "\n\nPROJECT REQUIREMENTS:\n" <> Enum.join(Enum.reverse(parts), "\n")
+      else
+        ""
+      end
+    else
+      ""
+    end
+  end
+
+  defp format_greenfield_context(_), do: ""
 end

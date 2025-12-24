@@ -79,19 +79,23 @@ defmodule Albedo.LLM.Client do
           {:error, :rate_limited}
 
         {:error, :timeout} ->
-          # Retry on timeout (transient network issue)
-          Logger.warning("Request timed out, retrying (attempt #{attempt + 1}/#{@max_retries})")
-          Process.sleep(@retry_delay_ms)
-          do_chat(config, provider, prompt, opts, attempt + 1)
+          retry_with_log(config, provider, prompt, opts, attempt, "Request timed out")
+
+        {:error, {:request_failed, %{reason: :timeout}}} ->
+          retry_with_log(config, provider, prompt, opts, attempt, "Connection timed out")
+
+        {:error, {:request_failed, %{reason: :econnrefused}}} ->
+          retry_with_log(config, provider, prompt, opts, attempt, "Connection refused")
+
+        {:error, {:request_failed, _}} ->
+          # Network error - retry
+          retry_with_log(config, provider, prompt, opts, attempt, "Network error")
+
+        {:error, {:http_error, status, _}} when status >= 500 ->
+          retry_with_log(config, provider, prompt, opts, attempt, "Server error #{status}")
 
         {:error, {:http_error, status}} when status >= 500 ->
-          # Retry on server errors (5xx)
-          Logger.warning(
-            "Server error #{status}, retrying (attempt #{attempt + 1}/#{@max_retries})"
-          )
-
-          Process.sleep(@retry_delay_ms)
-          do_chat(config, provider, prompt, opts, attempt + 1)
+          retry_with_log(config, provider, prompt, opts, attempt, "Server error #{status}")
 
         {:error, reason} ->
           # Don't retry other errors
@@ -104,6 +108,12 @@ defmodule Albedo.LLM.Client do
 
   defp do_chat(_config, _provider, _prompt, _opts, _attempt) do
     {:error, :max_retries_exceeded}
+  end
+
+  defp retry_with_log(config, provider, prompt, opts, attempt, message) do
+    Logger.warning("#{message}, retrying (attempt #{attempt + 1}/#{@max_retries})")
+    Process.sleep(@retry_delay_ms)
+    do_chat(config, provider, prompt, opts, attempt + 1)
   end
 
   defp try_fallback(config, prompt, opts) do

@@ -372,11 +372,10 @@ defmodule Albedo.Session.State do
   end
 
   defp init_greenfield_phases do
-    # Greenfield projects skip code analysis phases
-    # Only domain_research and change_planning are active
+    # Greenfield projects skip code-specific phases but include planning phases
+    # Active: domain_research, tech_stack, architecture, change_planning
+    # Skipped: conventions, feature_location, impact_analysis (require existing code)
     skipped_phases = [
-      :tech_stack,
-      :architecture,
       :conventions,
       :feature_location,
       :impact_analysis
@@ -443,8 +442,16 @@ defmodule Albedo.Session.State do
       phases: phases_from_json(data["phases"]),
       context: %{},
       clarifying_questions: data["clarifying_questions"] || [],
-      summary: data["summary"]
+      summary: atomize_summary(data["summary"])
     }
+  end
+
+  defp atomize_summary(nil), do: nil
+
+  defp atomize_summary(summary) when is_map(summary) do
+    summary
+    |> Enum.map(fn {k, v} -> {String.to_existing_atom(k), v} end)
+    |> Map.new()
   end
 
   defp phases_from_json(nil), do: init_phases()

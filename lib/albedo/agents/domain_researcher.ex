@@ -26,9 +26,10 @@ defmodule Albedo.Agents.DomainResearcher do
   @impl Albedo.Agents.Base
   def investigate(state) do
     task = state.task
+    context = state.context
     detected_domain = detect_domain(task)
 
-    prompt = Prompts.domain_research(task)
+    prompt = Prompts.domain_research(task, context)
 
     case call_llm(prompt) do
       {:ok, response} ->

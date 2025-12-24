@@ -112,7 +112,7 @@ defmodule Albedo.Session.Worker do
 
     if State.complete?(state) do
       state = finalize_session(state)
-      {:noreply, state}
+      {:stop, :normal, state}
     else
       state = start_next_phase(state)
       {:noreply, state}
