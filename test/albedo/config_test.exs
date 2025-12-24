@@ -8,7 +8,7 @@ defmodule Albedo.ConfigTest do
       assert {:ok, config} = Config.load()
       assert config["llm"]["provider"] == "gemini"
       assert config["llm"]["model"] == "gemini-2.0-flash"
-      assert config["output"]["default_format"] == "markdown"
+      assert config["output"]["session_dir"] == "~/.albedo/sessions"
     end
   end
 

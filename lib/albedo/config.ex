@@ -17,7 +17,6 @@ defmodule Albedo.Config do
       }
     },
     "output" => %{
-      "default_format" => "markdown",
       "session_dir" => "~/.albedo/sessions"
     },
     "search" => %{
@@ -201,7 +200,6 @@ defmodule Albedo.Config do
     model = "claude-sonnet-4-20250514"
 
     [output]
-    default_format = "markdown"  # markdown | linear | jira
     session_dir = "~/.albedo/sessions"
 
     [search]

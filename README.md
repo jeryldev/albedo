@@ -166,8 +166,6 @@ Summary:
 | `--stack <stack>` | | Tech stack hint: `phoenix`, `rails`, `nextjs`, `fastapi`, etc. |
 | `--database <db>` | | Database hint: `postgres`, `mysql`, `sqlite`, `mongodb` |
 | `--interactive` | `-i` | Enable interactive clarifying questions |
-| `--output <format>` | `-o` | Output format: `markdown` (default), `linear`, `jira` |
-| `--project <name>` | `-p` | Project/team name for ticket system integration |
 | `--scope <scope>` | `-s` | Planning scope: `full` (default), `minimal` |
 | `--help` | `-h` | Show help message |
 | `--version` | `-v` | Show version |

@@ -361,9 +361,7 @@ defmodule Albedo.Session.State do
 
   defp build_session_config(opts) do
     %{
-      interactive: opts[:interactive] || false,
-      output_format: opts[:output] || "markdown",
-      project: opts[:project]
+      interactive: opts[:interactive] || false
     }
   end
 
@@ -373,8 +371,7 @@ defmodule Albedo.Session.State do
       project_name: project_name,
       stack: opts[:stack],
       database: opts[:database],
-      interactive: opts[:interactive] || false,
-      output_format: opts[:output] || "markdown"
+      interactive: opts[:interactive] || false
     }
   end
 

@@ -182,19 +182,6 @@ defmodule Albedo.CLITest do
       assert output =~ "-i"
     end
 
-    test "help shows --output option" do
-      output = run_cli_safely(["--help"])
-      assert output =~ "--output"
-      assert output =~ "-o"
-      assert output =~ "markdown"
-    end
-
-    test "help shows --project option" do
-      output = run_cli_safely(["--help"])
-      assert output =~ "--project"
-      assert output =~ "-p"
-    end
-
     test "help shows --scope option" do
       output = run_cli_safely(["--help"])
       assert output =~ "--scope"
@@ -208,8 +195,6 @@ defmodule Albedo.CLITest do
       assert output =~ "-t"
       assert output =~ "-n"
       assert output =~ "-i"
-      assert output =~ "-o"
-      assert output =~ "-p"
       assert output =~ "-s"
       assert output =~ "-h"
       assert output =~ "-v"

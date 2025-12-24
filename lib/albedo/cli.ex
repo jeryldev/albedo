@@ -33,8 +33,6 @@ defmodule Albedo.CLI do
           version: :boolean,
           task: :string,
           interactive: :boolean,
-          output: :string,
-          project: :string,
           scope: :string,
           stack: :string,
           database: :string,
@@ -45,8 +43,6 @@ defmodule Albedo.CLI do
           v: :version,
           t: :task,
           i: :interactive,
-          o: :output,
-          p: :project,
           s: :scope,
           n: :name
         ]
@@ -504,8 +500,6 @@ defmodule Albedo.CLI do
           --stack <stack>         Tech stack: phoenix, rails, nextjs, fastapi, etc.
           --database <db>         Database: postgres, mysql, sqlite, mongodb
           -i, --interactive       Enable interactive clarifying questions
-          -o, --output <format>   Output format: markdown (default), linear, jira
-          -p, --project <name>    Project name for ticket system integration
           -s, --scope <scope>     Planning scope: full (default), minimal
           -h, --help              Show this help message
           -v, --version           Show version
