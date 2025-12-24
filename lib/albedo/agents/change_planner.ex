@@ -12,7 +12,7 @@ defmodule Albedo.Agents.ChangePlanner do
   def investigate(state) do
     task = state.task
     context = state.context
-    greenfield? = get_in(state.config, [:greenfield]) || false
+    greenfield? = context[:greenfield] || false
 
     prompt = Prompts.change_planning(task, context)
 
