@@ -1,0 +1,246 @@
+defmodule Albedo.Session.Worker do
+  @moduledoc """
+  GenServer that orchestrates a single analysis session.
+  Coordinates agents through all phases and manages session state.
+  """
+
+  use GenServer
+
+  alias Albedo.Agents
+  alias Albedo.Session.{Registry, State}
+
+  require Logger
+
+  @agent_modules %{
+    domain_research: Albedo.Agents.DomainResearcher,
+    tech_stack: Albedo.Agents.TechStack,
+    architecture: Albedo.Agents.Architecture,
+    conventions: Albedo.Agents.Conventions,
+    feature_location: Albedo.Agents.FeatureLocator,
+    impact_analysis: Albedo.Agents.ImpactTracer,
+    change_planning: Albedo.Agents.ChangePlanner
+  }
+
+  def start_link({codebase_path, task, opts}) do
+    GenServer.start_link(__MODULE__, {:new, codebase_path, task, opts})
+  end
+
+  def start_link({:resume, session_dir}) do
+    GenServer.start_link(__MODULE__, {:resume, session_dir})
+  end
+
+  @impl true
+  def init({:new, codebase_path, task, opts}) do
+    state = State.new(codebase_path, task, opts)
+    Registry.register(state.id)
+    State.save(state)
+    send(self(), :start_analysis)
+    {:ok, state}
+  end
+
+  def init({:resume, session_dir}) do
+    case State.load(session_dir) do
+      {:ok, state} ->
+        Registry.register(state.id)
+        send(self(), :resume_analysis)
+        {:ok, state}
+
+      {:error, reason} ->
+        {:stop, reason}
+    end
+  end
+
+  @impl true
+  def handle_call(:get_state, _from, state) do
+    {:reply, state, state}
+  end
+
+  def handle_call(:get_result, _from, state) do
+    result = build_result(state)
+    {:reply, result, state}
+  end
+
+  def handle_call({:answer_question, answer}, _from, state) do
+    previous_state = get_previous_state(state)
+    state = State.answer_question(state, answer, previous_state)
+    State.save(state)
+    send(self(), :continue_analysis)
+    {:reply, :ok, state}
+  end
+
+  @impl true
+  def handle_info(:start_analysis, state) do
+    print_phase_header("Starting analysis")
+    state = start_next_phase(state)
+    {:noreply, state}
+  end
+
+  def handle_info(:resume_analysis, state) do
+    print_phase_header("Resuming analysis")
+    state = start_next_phase(state)
+    {:noreply, state}
+  end
+
+  def handle_info(:continue_analysis, state) do
+    state = start_next_phase(state)
+    {:noreply, state}
+  end
+
+  def handle_info({:agent_complete, phase, findings}, state) do
+    print_phase_complete(phase)
+    state = State.complete_phase(state, phase, findings)
+    State.save(state)
+
+    if State.complete?(state) do
+      state = finalize_session(state)
+      {:noreply, state}
+    else
+      state = start_next_phase(state)
+      {:noreply, state}
+    end
+  end
+
+  def handle_info({:agent_failed, phase, reason}, state) do
+    Logger.error("Agent failed for phase #{phase}: #{inspect(reason)}")
+    state = State.fail_phase(state, phase, reason)
+    State.save(state)
+    {:noreply, state}
+  end
+
+  defp start_next_phase(state) do
+    case State.first_incomplete_phase(state) do
+      nil ->
+        state = State.transition(state, :completed)
+        State.save(state)
+        state
+
+      phase ->
+        start_phase(state, phase)
+    end
+  end
+
+  defp start_phase(state, phase) do
+    print_phase_start(phase)
+    state = State.start_phase(state, phase)
+    State.save(state)
+
+    context = build_agent_context(state, phase)
+    agent_module = @agent_modules[phase]
+
+    {:ok, _pid} =
+      Agents.Supervisor.start_agent(agent_module, %{
+        session_id: state.id,
+        session_dir: state.session_dir,
+        codebase_path: state.codebase_path,
+        task: state.task,
+        phase: phase,
+        context: context,
+        output_file: State.phase_output_file(phase)
+      })
+
+    state
+  end
+
+  defp build_agent_context(state, phase) do
+    case phase do
+      :domain_research ->
+        %{task: state.task}
+
+      :tech_stack ->
+        %{
+          task: state.task,
+          domain_research: state.context[:domain_research]
+        }
+
+      :architecture ->
+        %{
+          task: state.task,
+          domain_research: state.context[:domain_research],
+          tech_stack: state.context[:tech_stack]
+        }
+
+      :conventions ->
+        %{
+          task: state.task,
+          domain_research: state.context[:domain_research],
+          tech_stack: state.context[:tech_stack],
+          architecture: state.context[:architecture]
+        }
+
+      :feature_location ->
+        %{
+          task: state.task,
+          domain_research: state.context[:domain_research],
+          tech_stack: state.context[:tech_stack],
+          architecture: state.context[:architecture],
+          conventions: state.context[:conventions]
+        }
+
+      :impact_analysis ->
+        %{
+          task: state.task,
+          domain_research: state.context[:domain_research],
+          tech_stack: state.context[:tech_stack],
+          architecture: state.context[:architecture],
+          conventions: state.context[:conventions],
+          feature_location: state.context[:feature_location]
+        }
+
+      :change_planning ->
+        state.context
+    end
+  end
+
+  defp finalize_session(state) do
+    print_phase_header("Analysis complete")
+
+    summary = %{
+      tickets_count: get_in(state.context, [:change_planning, :tickets_count]) || 0,
+      total_points: get_in(state.context, [:change_planning, :total_points]) || 0,
+      files_to_create: get_in(state.context, [:change_planning, :files_to_create]) || 0,
+      files_to_modify: get_in(state.context, [:change_planning, :files_to_modify]) || 0,
+      risks_identified: get_in(state.context, [:change_planning, :risks_identified]) || 0
+    }
+
+    state = State.set_summary(state, summary)
+    State.save(state)
+    state
+  end
+
+  defp build_result(state) do
+    %{
+      session_id: state.id,
+      output_path: Path.join(state.session_dir, "FEATURE.md"),
+      tickets_count: state.summary[:tickets_count],
+      total_points: state.summary[:total_points],
+      files_to_create: state.summary[:files_to_create],
+      files_to_modify: state.summary[:files_to_modify],
+      risks_identified: state.summary[:risks_identified]
+    }
+  end
+
+  defp get_previous_state(state) do
+    current_phase = State.first_incomplete_phase(state)
+
+    if current_phase do
+      State.phase_state_name(current_phase)
+    else
+      :completed
+    end
+  end
+
+  defp print_phase_header(message) do
+    IO.puts(Owl.Data.tag("\n#{message}", :cyan))
+    IO.puts(String.duplicate("─", 50))
+  end
+
+  defp print_phase_start(phase) do
+    phase_name = phase |> to_string() |> String.replace("_", " ") |> String.capitalize()
+    IO.puts(Owl.Data.tag("  ├─ #{phase_name}...", :light_black))
+  end
+
+  defp print_phase_complete(phase) do
+    output_file = State.phase_output_file(phase)
+    IO.puts(Owl.Data.tag("  │  └─ ✓ Saved #{output_file}", :green))
+  end
+end
