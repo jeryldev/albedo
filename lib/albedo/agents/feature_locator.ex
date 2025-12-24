@@ -82,12 +82,45 @@ defmodule Albedo.Agents.FeatureLocator do
     migration_results = search_migrations(path, keywords)
     test_results = search_tests(path, keywords)
 
+    all_files =
+      (Enum.map(keyword_results, & &1.file) ++
+         Enum.map(schema_results, & &1.file) ++
+         Enum.map(migration_results, & &1.file) ++
+         Enum.map(test_results, & &1.file))
+      |> Enum.uniq()
+
+    file_contents = read_key_files(all_files)
+
     %{
       keyword_matches: keyword_results,
       schemas: schema_results,
       migrations: migration_results,
-      tests: test_results
+      tests: test_results,
+      file_contents: file_contents
     }
+  end
+
+  defp read_key_files(files) do
+    files
+    |> Enum.take(10)
+    |> Enum.map(fn file ->
+      case File.read(file) do
+        {:ok, content} ->
+          truncated =
+            if String.length(content) > 5000 do
+              String.slice(content, 0, 5000) <> "\n\n... [truncated]"
+            else
+              content
+            end
+
+          {file, truncated}
+
+        _ ->
+          nil
+      end
+    end)
+    |> Enum.reject(&is_nil/1)
+    |> Map.new()
   end
 
   defp search_schemas(path, keywords) do
@@ -190,6 +223,27 @@ defmodule Albedo.Agents.FeatureLocator do
           |> Enum.map_join("\n", &format_match/1)
 
         sections ++ ["## Test Matches\n#{test_section}"]
+      else
+        sections
+      end
+
+    sections =
+      if results[:file_contents] && map_size(results.file_contents) > 0 do
+        file_section =
+          results.file_contents
+          |> Enum.map_join("\n\n", fn {file, content} ->
+            ext = Path.extname(file) |> String.trim_leading(".")
+            lang = if ext == "", do: "", else: ext
+
+            """
+            ### #{file}
+            ```#{lang}
+            #{content}
+            ```
+            """
+          end)
+
+        sections ++ ["## Source Files\n#{file_section}"]
       else
         sections
       end
