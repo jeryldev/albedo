@@ -23,6 +23,14 @@ defmodule Albedo.Session.Supervisor do
   end
 
   @doc """
+  Start a new greenfield planning session.
+  """
+  def start_greenfield_session(project_name, task, opts \\ []) do
+    spec = {Albedo.Session.Worker, {:greenfield, project_name, task, opts}}
+    DynamicSupervisor.start_child(__MODULE__, spec)
+  end
+
+  @doc """
   Resume an existing session.
   """
   def resume_session(session_dir) do

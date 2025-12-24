@@ -124,6 +124,36 @@ defmodule Albedo.CLITest do
     end
   end
 
+  describe "plan command (greenfield)" do
+    test "requires --task option" do
+      output = run_cli_safely_stderr(["plan", "--name", "my_app"])
+      assert output =~ "Missing required --task option"
+    end
+
+    test "requires --name option" do
+      output = run_cli_safely_stderr(["plan", "--task", "Build a todo app"])
+      assert output =~ "Missing required --name option"
+    end
+
+    test "help mentions plan command" do
+      output = run_cli_safely(["--help"])
+      assert output =~ "plan"
+      assert output =~ "greenfield"
+    end
+
+    test "help shows stack and database options" do
+      output = run_cli_safely(["--help"])
+      assert output =~ "--stack"
+      assert output =~ "--database"
+    end
+
+    test "help shows plan examples" do
+      output = run_cli_safely(["--help"])
+      assert output =~ "albedo plan"
+      assert output =~ "--name"
+    end
+  end
+
   describe "unknown command" do
     test "reports unknown command" do
       output = run_cli_safely_stderr(["unknown"])
@@ -142,6 +172,47 @@ defmodule Albedo.CLITest do
       output = run_cli_safely(["--help"])
       assert is_binary(output)
       refute output =~ "ArgumentError"
+    end
+  end
+
+  describe "CLI option parsing" do
+    test "help shows --interactive option" do
+      output = run_cli_safely(["--help"])
+      assert output =~ "--interactive"
+      assert output =~ "-i"
+    end
+
+    test "help shows --output option" do
+      output = run_cli_safely(["--help"])
+      assert output =~ "--output"
+      assert output =~ "-o"
+      assert output =~ "markdown"
+    end
+
+    test "help shows --project option" do
+      output = run_cli_safely(["--help"])
+      assert output =~ "--project"
+      assert output =~ "-p"
+    end
+
+    test "help shows --scope option" do
+      output = run_cli_safely(["--help"])
+      assert output =~ "--scope"
+      assert output =~ "-s"
+      assert output =~ "full"
+      assert output =~ "minimal"
+    end
+
+    test "accepts short aliases for common options" do
+      output = run_cli_safely(["--help"])
+      assert output =~ "-t"
+      assert output =~ "-n"
+      assert output =~ "-i"
+      assert output =~ "-o"
+      assert output =~ "-p"
+      assert output =~ "-s"
+      assert output =~ "-h"
+      assert output =~ "-v"
     end
   end
 end

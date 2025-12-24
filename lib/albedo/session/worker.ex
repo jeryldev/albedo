@@ -25,6 +25,10 @@ defmodule Albedo.Session.Worker do
     GenServer.start_link(__MODULE__, {:new, codebase_path, task, opts})
   end
 
+  def start_link({:greenfield, project_name, task, opts}) do
+    GenServer.start_link(__MODULE__, {:greenfield, project_name, task, opts})
+  end
+
   def start_link({:resume, session_dir}) do
     GenServer.start_link(__MODULE__, {:resume, session_dir})
   end
@@ -35,6 +39,14 @@ defmodule Albedo.Session.Worker do
     Registry.register(state.id)
     State.save(state)
     send(self(), :start_analysis)
+    {:ok, state}
+  end
+
+  def init({:greenfield, project_name, task, opts}) do
+    state = State.new_greenfield(project_name, task, opts)
+    Registry.register(state.id)
+    State.save(state)
+    send(self(), :start_greenfield_planning)
     {:ok, state}
   end
 
@@ -71,6 +83,13 @@ defmodule Albedo.Session.Worker do
   @impl true
   def handle_info(:start_analysis, state) do
     print_phase_header("Starting analysis")
+    state = start_next_phase(state)
+    {:noreply, state}
+  end
+
+  def handle_info(:start_greenfield_planning, state) do
+    project_name = state.context[:project_name] || "new project"
+    print_phase_header("Planning greenfield project: #{project_name}")
     state = start_next_phase(state)
     {:noreply, state}
   end
@@ -142,73 +161,110 @@ defmodule Albedo.Session.Worker do
   end
 
   defp build_agent_context(state, phase) do
-    case phase do
-      :domain_research ->
-        %{task: state.task}
-
-      :tech_stack ->
+    greenfield_context =
+      if state.context[:greenfield] do
         %{
-          task: state.task,
-          domain_research: state.context[:domain_research]
+          greenfield: true,
+          project_name: state.context[:project_name],
+          stack: state.context[:stack],
+          database: state.context[:database]
         }
+      else
+        %{}
+      end
 
-      :architecture ->
-        %{
-          task: state.task,
-          domain_research: state.context[:domain_research],
-          tech_stack: state.context[:tech_stack]
-        }
+    base_context =
+      case phase do
+        :domain_research ->
+          %{task: state.task}
 
-      :conventions ->
-        %{
-          task: state.task,
-          domain_research: state.context[:domain_research],
-          tech_stack: state.context[:tech_stack],
-          architecture: state.context[:architecture]
-        }
+        :tech_stack ->
+          %{
+            task: state.task,
+            domain_research: state.context[:domain_research]
+          }
 
-      :feature_location ->
-        %{
-          task: state.task,
-          domain_research: state.context[:domain_research],
-          tech_stack: state.context[:tech_stack],
-          architecture: state.context[:architecture],
-          conventions: state.context[:conventions]
-        }
+        :architecture ->
+          %{
+            task: state.task,
+            domain_research: state.context[:domain_research],
+            tech_stack: state.context[:tech_stack]
+          }
 
-      :impact_analysis ->
-        %{
-          task: state.task,
-          domain_research: state.context[:domain_research],
-          tech_stack: state.context[:tech_stack],
-          architecture: state.context[:architecture],
-          conventions: state.context[:conventions],
-          feature_location: state.context[:feature_location]
-        }
+        :conventions ->
+          %{
+            task: state.task,
+            domain_research: state.context[:domain_research],
+            tech_stack: state.context[:tech_stack],
+            architecture: state.context[:architecture]
+          }
 
-      :change_planning ->
-        state.context
-    end
+        :feature_location ->
+          %{
+            task: state.task,
+            domain_research: state.context[:domain_research],
+            tech_stack: state.context[:tech_stack],
+            architecture: state.context[:architecture],
+            conventions: state.context[:conventions]
+          }
+
+        :impact_analysis ->
+          %{
+            task: state.task,
+            domain_research: state.context[:domain_research],
+            tech_stack: state.context[:tech_stack],
+            architecture: state.context[:architecture],
+            conventions: state.context[:conventions],
+            feature_location: state.context[:feature_location]
+          }
+
+        :change_planning ->
+          state.context
+      end
+
+    Map.merge(greenfield_context, base_context)
   end
 
   defp finalize_session(state) do
-    print_phase_header("Analysis complete")
+    header =
+      if state.context[:greenfield],
+        do: "Planning complete",
+        else: "Analysis complete"
 
-    summary = %{
-      tickets_count: get_in(state.context, [:change_planning, :tickets_count]) || 0,
-      total_points: get_in(state.context, [:change_planning, :total_points]) || 0,
-      files_to_create: get_in(state.context, [:change_planning, :files_to_create]) || 0,
-      files_to_modify: get_in(state.context, [:change_planning, :files_to_modify]) || 0,
-      risks_identified: get_in(state.context, [:change_planning, :risks_identified]) || 0
-    }
+    print_phase_header(header)
+
+    summary =
+      build_summary(state)
+      |> maybe_add_greenfield_summary(state)
 
     state = State.set_summary(state, summary)
     State.save(state)
     state
   end
 
-  defp build_result(state) do
+  defp build_summary(state) do
     %{
+      tickets_count: get_in(state.context, [:change_planning, :tickets_count]) || 0,
+      total_points: get_in(state.context, [:change_planning, :total_points]) || 0,
+      files_to_create: get_in(state.context, [:change_planning, :files_to_create]) || 0,
+      files_to_modify: get_in(state.context, [:change_planning, :files_to_modify]) || 0,
+      risks_identified: get_in(state.context, [:change_planning, :risks_identified]) || 0
+    }
+  end
+
+  defp maybe_add_greenfield_summary(summary, state) do
+    if state.context[:greenfield] do
+      Map.merge(summary, %{
+        recommended_stack: get_in(state.context, [:change_planning, :recommended_stack]),
+        setup_steps: get_in(state.context, [:change_planning, :setup_steps]) || 0
+      })
+    else
+      summary
+    end
+  end
+
+  defp build_result(state) do
+    base_result = %{
       session_id: state.id,
       output_path: Path.join(state.session_dir, "FEATURE.md"),
       tickets_count: state.summary[:tickets_count],
@@ -217,6 +273,15 @@ defmodule Albedo.Session.Worker do
       files_to_modify: state.summary[:files_to_modify],
       risks_identified: state.summary[:risks_identified]
     }
+
+    if state.context[:greenfield] do
+      Map.merge(base_result, %{
+        recommended_stack: state.summary[:recommended_stack],
+        setup_steps: state.summary[:setup_steps]
+      })
+    else
+      base_result
+    end
   end
 
   defp get_previous_state(state) do

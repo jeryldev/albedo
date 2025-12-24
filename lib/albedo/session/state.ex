@@ -121,6 +121,37 @@ defmodule Albedo.Session.State do
   end
 
   @doc """
+  Create a new greenfield session state (no existing codebase).
+  Skips code analysis phases and goes directly to planning.
+  """
+  def new_greenfield(project_name, task, opts \\ []) do
+    now = DateTime.utc_now()
+    id = generate_id(task)
+    config = Albedo.Config.load!()
+    session_dir = Path.join(Albedo.Config.session_dir(config), id)
+
+    %__MODULE__{
+      id: id,
+      codebase_path: nil,
+      task: task,
+      state: :created,
+      created_at: now,
+      updated_at: now,
+      session_dir: session_dir,
+      config: build_greenfield_config(project_name, opts),
+      phases: init_greenfield_phases(),
+      context: %{
+        greenfield: true,
+        project_name: project_name,
+        stack: opts[:stack],
+        database: opts[:database]
+      },
+      clarifying_questions: [],
+      summary: nil
+    }
+  end
+
+  @doc """
   Load session state from a session directory.
   """
   def load(session_dir) do
@@ -327,6 +358,45 @@ defmodule Albedo.Session.State do
       output_format: opts[:output] || "markdown",
       project: opts[:project]
     }
+  end
+
+  defp build_greenfield_config(project_name, opts) do
+    %{
+      greenfield: true,
+      project_name: project_name,
+      stack: opts[:stack],
+      database: opts[:database],
+      interactive: opts[:interactive] || false,
+      output_format: opts[:output] || "markdown"
+    }
+  end
+
+  defp init_greenfield_phases do
+    # Greenfield projects skip code analysis phases
+    # Only domain_research and change_planning are active
+    skipped_phases = [
+      :tech_stack,
+      :architecture,
+      :conventions,
+      :feature_location,
+      :impact_analysis
+    ]
+
+    @phases
+    |> Enum.map(fn phase ->
+      status = if phase in skipped_phases, do: :skipped, else: :pending
+
+      {phase,
+       %{
+         status: status,
+         started_at: nil,
+         completed_at: nil,
+         duration_ms: nil,
+         output_file: nil,
+         error: nil
+       }}
+    end)
+    |> Map.new()
   end
 
   defp to_json(%__MODULE__{} = state) do

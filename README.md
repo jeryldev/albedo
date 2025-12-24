@@ -48,6 +48,53 @@ mix escript.build
 ./albedo init
 ```
 
+### Adding to PATH (Optional)
+
+To run `albedo` from anywhere instead of `./albedo`:
+
+#### macOS / Linux
+
+Add to your `~/.zshrc` or `~/.bashrc`:
+
+```bash
+# Option 1: Add the albedo directory to PATH
+export PATH="$PATH:/path/to/albedo"
+
+# Option 2: Or create a symlink to a directory already in PATH
+sudo ln -sf /path/to/albedo/albedo /usr/local/bin/albedo
+```
+
+Then reload your shell:
+```bash
+source ~/.zshrc  # or source ~/.bashrc
+```
+
+#### Windows (PowerShell)
+
+```powershell
+# Add to your PowerShell profile
+$env:Path += ";C:\path\to\albedo"
+
+# Or permanently add to system PATH (run as Administrator)
+[Environment]::SetEnvironmentVariable("Path", $env:Path + ";C:\path\to\albedo", "User")
+```
+
+#### Windows (Command Prompt)
+
+```cmd
+# Temporarily for current session
+set PATH=%PATH%;C:\path\to\albedo
+
+# Permanently (run as Administrator)
+setx PATH "%PATH%;C:\path\to\albedo"
+```
+
+After adding to PATH, you can run Albedo from anywhere:
+```bash
+albedo --help
+albedo analyze ~/projects/myapp --task "Add user authentication"
+```
+
 ### Setting Up API Keys
 
 Albedo supports three LLM providers. You only need **one** to get started.
@@ -168,6 +215,7 @@ Summary:
 |---------|-------------|
 | `albedo init` | Initialize configuration (first-time setup) |
 | `albedo analyze <path> --task "..."` | Analyze a codebase with a feature request |
+| `albedo plan --name <name> --task "..."` | Plan a new project from scratch (greenfield) |
 | `albedo resume <session_path>` | Resume an incomplete analysis session |
 | `albedo sessions` | List recent analysis sessions |
 | `albedo show <session_id>` | Display a session's FEATURE.md output |
@@ -175,14 +223,101 @@ Summary:
 
 ### Options
 
+| Option | Alias | Description |
+|--------|-------|-------------|
+| `--task <desc>` | `-t` | Task/feature description (required for analyze/plan) |
+| `--name <name>` | `-n` | Project name (required for plan command) |
+| `--stack <stack>` | | Tech stack hint: `phoenix`, `rails`, `nextjs`, `fastapi`, etc. |
+| `--database <db>` | | Database hint: `postgres`, `mysql`, `sqlite`, `mongodb` |
+| `--interactive` | `-i` | Enable interactive clarifying questions |
+| `--output <format>` | `-o` | Output format: `markdown` (default), `linear`, `jira` |
+| `--project <name>` | `-p` | Project/team name for ticket system integration |
+| `--scope <scope>` | `-s` | Planning scope: `full` (default), `minimal` |
+| `--help` | `-h` | Show help message |
+| `--version` | `-v` | Show version |
+
+## Greenfield Planning: Building from Scratch
+
+Albedo can also plan brand new projects that don't exist yet. Use the `plan` command when you're starting from scratch.
+
+**Note:** You don't need to create a project folder first. Albedo produces a planning document with tickets - it doesn't create the actual project files. After planning, you create the project and implement based on the generated tickets.
+
+**Where are session files stored?**
+
+All sessions (both `analyze` and `plan`) are stored in `~/.albedo/sessions/`:
+
 ```
--t, --task <desc>       Task/feature description (required for analyze)
--i, --interactive       Enable interactive clarifying questions
--o, --output <format>   Output format: markdown (default), linear, jira
--s, --scope <scope>     Planning scope: full (default), minimal
--h, --help              Show help message
--v, --version           Show version
+~/.albedo/
+├── config.toml                     # Your configuration
+└── sessions/
+    └── 2024-12-24_my-todo-app/     # Session folder (date + task slug)
+        ├── session.json            # Session state and metadata
+        ├── 00_domain_research.md   # Domain analysis
+        ├── 01_tech_stack.md        # Tech stack detection (skipped for greenfield)
+        ├── 02_architecture.md      # Architecture mapping (skipped for greenfield)
+        ├── 03_conventions.md       # Code conventions (skipped for greenfield)
+        ├── 04_feature_location.md  # Relevant code locations (skipped for greenfield)
+        ├── 05_impact_analysis.md   # Dependency tracing (skipped for greenfield)
+        └── FEATURE.md              # Final tickets and implementation plan
 ```
+
+For greenfield projects, only `00_domain_research.md` and `FEATURE.md` are generated since there's no codebase to analyze.
+
+```bash
+# No folder needed - just run from anywhere
+albedo plan \
+  --name my_todo_app \
+  --task "Build a todo app with user authentication, tags, and sharing" \
+  --stack phoenix \
+  --database postgres
+```
+
+### When to Use Greenfield vs Analyze
+
+| Use `analyze` when... | Use `plan` when... |
+|-----------------------|-------------------|
+| You have an existing codebase | You're starting from scratch |
+| Adding features to existing code | Building a new project |
+| Modifying or refactoring | Designing initial architecture |
+
+### Greenfield Example
+
+```bash
+./albedo plan \
+  --name shop_api \
+  --task "Build an e-commerce REST API with products, orders, and payments" \
+  --stack phoenix \
+  --database postgres
+```
+
+Output:
+```
+Planning greenfield project: shop_api
+──────────────────────────────────────────────────
+  ├─ Domain research...
+  │  └─ ✓ Saved 00_domain_research.md
+  ├─ Change planning...
+  │  └─ ✓ Saved FEATURE.md
+
+Planning complete!
+Session: 2024-12-24_e-commerce-api
+Output: ~/.albedo/sessions/2024-12-24_e-commerce-api/FEATURE.md
+
+Summary:
+  • 12 tickets generated
+  • 21 story points estimated
+  • 15 files to create
+  • Recommended stack: Phoenix + Ecto + PostgreSQL
+  • 8 setup steps
+```
+
+The greenfield plan includes:
+- Project structure recommendations
+- Technology stack guidance
+- Initial architecture design
+- Setup/installation tickets
+- Feature implementation tickets
+- Testing strategy
 
 ## How It Works
 

@@ -145,6 +145,77 @@ defmodule Albedo.IntegrationTest do
     end
   end
 
+  describe "greenfield session state integration" do
+    setup do
+      dir = Mocks.create_temp_dir()
+      on_exit(fn -> Mocks.cleanup_temp_dir(dir) end)
+      {:ok, dir: dir}
+    end
+
+    test "create greenfield session state", %{dir: dir} do
+      project_name = "my_todo_app"
+      task = "Build a todo app with user authentication"
+
+      state = State.new_greenfield(project_name, task, stack: "phoenix", database: "postgres")
+      state = %{state | session_dir: dir}
+
+      assert state.codebase_path == nil
+      assert state.task == task
+      assert state.context[:greenfield] == true
+      assert state.context[:project_name] == project_name
+      assert state.context[:stack] == "phoenix"
+      assert state.context[:database] == "postgres"
+    end
+
+    test "greenfield skips code analysis phases", %{dir: dir} do
+      state = State.new_greenfield("my_app", "Build an API", [])
+      state = %{state | session_dir: dir}
+
+      assert state.phases[:tech_stack].status == :skipped
+      assert state.phases[:architecture].status == :skipped
+      assert state.phases[:conventions].status == :skipped
+      assert state.phases[:feature_location].status == :skipped
+      assert state.phases[:impact_analysis].status == :skipped
+
+      assert state.phases[:domain_research].status == :pending
+      assert state.phases[:change_planning].status == :pending
+    end
+
+    test "greenfield phase progression skips analysis phases", %{dir: dir} do
+      state = State.new_greenfield("my_app", "Build an API", [])
+      state = %{state | session_dir: dir}
+
+      assert State.first_incomplete_phase(state) == :domain_research
+
+      state =
+        state
+        |> State.start_phase(:domain_research)
+        |> State.complete_phase(:domain_research, %{domain: "API development"})
+
+      assert State.first_incomplete_phase(state) == :change_planning
+
+      state =
+        state
+        |> State.start_phase(:change_planning)
+        |> State.complete_phase(:change_planning, %{tickets_count: 5})
+
+      assert State.first_incomplete_phase(state) == nil
+      assert State.complete?(state)
+    end
+
+    test "save and load greenfield session", %{dir: dir} do
+      state = State.new_greenfield("my_app", "Build a CLI tool", stack: "elixir")
+      state = %{state | session_dir: dir}
+
+      :ok = State.save(state)
+      {:ok, loaded_state} = State.load(dir)
+
+      assert loaded_state.codebase_path == nil
+      assert loaded_state.task == "Build a CLI tool"
+      assert loaded_state.phases[:tech_stack].status == :skipped
+    end
+  end
+
   describe "output formatting" do
     test "Owl.IO.puts handles tagged data correctly" do
       output =

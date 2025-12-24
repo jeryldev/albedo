@@ -21,6 +21,21 @@ defmodule Albedo.Session do
   end
 
   @doc """
+  Start a new greenfield planning session (no existing codebase).
+  """
+  def start_greenfield(project_name, task, opts \\ []) do
+    greenfield_opts = Keyword.put(opts, :greenfield, true)
+
+    case Supervisor.start_greenfield_session(project_name, task, greenfield_opts) do
+      {:ok, pid} ->
+        wait_for_completion(pid)
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  @doc """
   Resume an existing session and wait for completion.
   """
   def resume(session_dir) do

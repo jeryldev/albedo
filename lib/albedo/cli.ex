@@ -35,7 +35,10 @@ defmodule Albedo.CLI do
           interactive: :boolean,
           output: :string,
           project: :string,
-          scope: :string
+          scope: :string,
+          stack: :string,
+          database: :string,
+          name: :string
         ],
         aliases: [
           h: :help,
@@ -44,7 +47,8 @@ defmodule Albedo.CLI do
           i: :interactive,
           o: :output,
           p: :project,
-          s: :scope
+          s: :scope,
+          n: :name
         ]
       )
 
@@ -94,6 +98,10 @@ defmodule Albedo.CLI do
 
   defp run_command(["replan", session_path | _], opts) do
     cmd_replan(session_path, opts)
+  end
+
+  defp run_command(["plan" | _], opts) do
+    cmd_plan(opts)
   end
 
   defp run_command([unknown | _], _opts) do
@@ -282,6 +290,53 @@ defmodule Albedo.CLI do
     end
   end
 
+  defp cmd_plan(opts) do
+    print_header()
+
+    task = opts[:task]
+    project_name = opts[:name]
+    stack = opts[:stack]
+
+    unless task do
+      print_error("Missing required --task option")
+      print_info("Usage: albedo plan --task \"Build a todo app\" --name my_app --stack phoenix")
+      halt_with_error(1)
+    end
+
+    unless project_name do
+      print_error("Missing required --name option")
+      print_info("Usage: albedo plan --task \"Build a todo app\" --name my_app --stack phoenix")
+      halt_with_error(1)
+    end
+
+    print_info("Planning new project: #{project_name}")
+    print_info("Task: #{task}")
+
+    if stack do
+      print_info("Stack: #{stack}")
+    end
+
+    if opts[:database] do
+      print_info("Database: #{opts[:database]}")
+    end
+
+    print_separator()
+
+    greenfield_opts = Keyword.merge(opts, greenfield: true)
+
+    case Session.start_greenfield(project_name, task, greenfield_opts) do
+      {:ok, session_id, result} ->
+        print_success("\nPlanning complete!")
+        print_info("Session: #{session_id}")
+        print_info("Output: #{result.output_path}")
+        print_greenfield_summary(result)
+
+      {:error, reason} ->
+        print_error("Planning failed: #{inspect(reason)}")
+        halt_with_error(1)
+    end
+  end
+
   defp print_header do
     Owl.IO.puts([
       Owl.Data.tag("Albedo", :cyan),
@@ -352,6 +407,31 @@ defmodule Albedo.CLI do
     end
   end
 
+  defp print_greenfield_summary(result) do
+    IO.puts("")
+    Owl.IO.puts(Owl.Data.tag("Summary:", :cyan))
+
+    if result[:tickets_count] do
+      IO.puts("  • #{result.tickets_count} tickets generated")
+    end
+
+    if result[:total_points] do
+      IO.puts("  • #{result.total_points} story points estimated")
+    end
+
+    if result[:files_to_create] do
+      IO.puts("  • #{result.files_to_create} files to create")
+    end
+
+    if result[:recommended_stack] do
+      IO.puts("  • Recommended stack: #{result.recommended_stack}")
+    end
+
+    if result[:setup_steps] do
+      IO.puts("  • #{result.setup_steps} setup steps")
+    end
+  end
+
   defp print_invalid_args(invalid) do
     Enum.each(invalid, fn {arg, _} ->
       print_error("Invalid option: #{arg}")
@@ -369,6 +449,7 @@ defmodule Albedo.CLI do
 
           init                    Initialize configuration (first-time setup)
           analyze <path>          Analyze a codebase with a task
+          plan                    Plan a new project from scratch (greenfield)
           resume <session_path>   Resume an incomplete session
           sessions                List recent sessions
           show <session_id>       View a session's output
@@ -378,7 +459,10 @@ defmodule Albedo.CLI do
       Owl.Data.tag("OPTIONS:", :yellow),
       """
 
-          -t, --task <desc>       Task description (required for analyze)
+          -t, --task <desc>       Task description (required for analyze/plan)
+          -n, --name <name>       Project name (required for plan)
+          --stack <stack>         Tech stack: phoenix, rails, nextjs, fastapi, etc.
+          --database <db>         Database: postgres, mysql, sqlite, mongodb
           -i, --interactive       Enable interactive clarifying questions
           -o, --output <format>   Output format: markdown (default), linear, jira
           -p, --project <name>    Project name for ticket system integration
@@ -390,9 +474,15 @@ defmodule Albedo.CLI do
       Owl.Data.tag("EXAMPLES:", :yellow),
       """
 
-          albedo init
+          # Analyze existing codebase
           albedo analyze ~/projects/myapp --task "Add user authentication"
           albedo analyze . -t "Convert status to configurable dropdown" -i
+
+          # Plan new project from scratch
+          albedo plan --name my_todo --task "Build a todo app with user accounts"
+          albedo plan -n shop_api -t "E-commerce API" --stack phoenix --database postgres
+
+          # Session management
           albedo sessions
           albedo show 2024-12-24_user-auth
           albedo resume ~/.albedo/sessions/2024-12-24_user-auth/
