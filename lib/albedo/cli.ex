@@ -524,8 +524,8 @@ defmodule Albedo.CLI do
 
           # Session management
           albedo sessions
-          albedo show 2024-12-24_user-auth
-          albedo resume ~/.albedo/sessions/2024-12-24_user-auth/
+          albedo show 2025-01-15_user-auth
+          albedo resume ~/.albedo/sessions/2025-01-15_user-auth/
 
       """,
       Owl.Data.tag("CONFIGURATION:", :yellow),

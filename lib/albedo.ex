@@ -18,13 +18,13 @@ defmodule Albedo do
       albedo analyze /path/to/codebase --task "Add user authentication"
 
       # Resume an incomplete session
-      albedo resume ~/.albedo/sessions/2024-12-24_user-auth/
+      albedo resume ~/.albedo/sessions/2025-01-15_user-auth/
 
       # List sessions
       albedo sessions
 
       # Show session output
-      albedo show 2024-12-24_user-auth
+      albedo show 2025-01-15_user-auth
 
   ## Configuration
 

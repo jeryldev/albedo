@@ -134,8 +134,8 @@ Albedo will:
 Output example:
 ```
 Analysis complete!
-Session: 2024-12-24_sqlite-storage
-Output: ~/.albedo/sessions/2024-12-24_sqlite-storage/FEATURE.md
+Session: 2025-01-15_sqlite-storage
+Output: ~/.albedo/sessions/2025-01-15_sqlite-storage/FEATURE.md
 
 Summary:
   - 5 tickets generated
@@ -186,7 +186,7 @@ All sessions (both `analyze` and `plan`) are stored in `~/.albedo/sessions/`:
 ~/.albedo/
 ├── config.toml                     # Your configuration
 └── sessions/
-    └── 2024-12-24_my-todo-app/     # Session folder (date + task slug)
+    └── 2025-01-15_my-todo-app/     # Session folder (date + task slug)
         ├── session.json            # Session state and metadata
         ├── 00_domain_research.md   # Domain analysis
         ├── 01_tech_stack.md        # Tech stack recommendations
@@ -240,8 +240,8 @@ Planning greenfield project: shop_api
   │  └─ ✓ Saved FEATURE.md
 
 Planning complete!
-Session: 2024-12-24_e-commerce-api
-Output: ~/.albedo/sessions/2024-12-24_e-commerce-api/FEATURE.md
+Session: 2025-01-15_e-commerce-api
+Output: ~/.albedo/sessions/2025-01-15_e-commerce-api/FEATURE.md
 
 Summary:
   • 12 tickets generated
