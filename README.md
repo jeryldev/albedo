@@ -1,6 +1,6 @@
 # Albedo
 
-> **Codebase-to-Tickets CLI Tool** - Gain clarity on any codebase and turn ideas into actionable work.
+> **Ideas-to-Tickets CLI Tool** - Turn feature ideas into actionable implementation plans.
 
 [![Status: Beta](https://img.shields.io/badge/Status-Beta-yellow.svg)](https://github.com/jeryldev/albedo)
 [![Elixir](https://img.shields.io/badge/Elixir-1.15+-purple.svg)](https://elixir-lang.org/)
@@ -10,14 +10,23 @@
 
 In alchemy, **albedo** (Latin for "whiteness") is the second stage of the *magnum opus* - the purification phase where **clarity emerges from chaos**. After the initial *nigredo* (decomposition), albedo represents the moment of illumination and understanding.
 
-This project embodies that concept: **Albedo brings clarity to codebases**, helping you understand unfamiliar code and transform vague feature ideas into clear, actionable implementation plans.
+This project embodies that concept: **Albedo brings clarity to your ideas**, helping you transform vague feature requests into clear, actionable implementation plans.
 
-Albedo acts as a **senior technical leader** that:
-- Investigates your codebase structure, conventions, and patterns
-- Understands the domain and technology stack
+### For Existing Codebases
+
+Albedo analyzes your codebase and generates implementation tickets:
+- Investigates structure, conventions, and patterns
 - Locates code relevant to your feature request
 - Traces dependencies and impact areas
-- Produces detailed tickets with implementation guidance
+- Produces detailed tickets with file-level guidance
+
+### For New Projects (Greenfield)
+
+Albedo helps you plan projects from scratch:
+- Researches the problem domain
+- Recommends tech stack and architecture
+- Designs initial project structure
+- Generates setup and implementation tickets
 
 ## Status
 
@@ -95,57 +104,49 @@ albedo --help
 albedo analyze ~/projects/myapp --task "Add user authentication"
 ```
 
-### Setting Up API Keys
+### Setting Up an API Key
 
-Albedo supports three LLM providers. You only need **one** to get started.
+The easiest way is to let Albedo guide you through setup:
 
-#### Option 1: Google Gemini (Recommended - Free tier available)
+```bash
+./albedo init
+```
 
-1. Go to [Google AI Studio](https://aistudio.google.com)
-2. Click "Get API Key" and create a new key
-3. Set the environment variable:
-   ```bash
-   export GEMINI_API_KEY="your-api-key-here"
-   ```
+This will:
+1. Create the config file at `~/.albedo/config.toml`
+2. Ask which LLM provider you want to use
+3. Add your API key to your shell profile (`.zshrc` or `.bashrc`)
+4. Configure the selected provider automatically
 
-#### Option 2: Anthropic Claude
+**Supported providers:**
 
-1. Go to [Anthropic Console](https://console.anthropic.com)
-2. Create an API key under Settings
-3. Set the environment variable:
-   ```bash
-   export ANTHROPIC_API_KEY="your-api-key-here"
-   ```
+| Provider | Get API Key | Free Tier |
+|----------|-------------|-----------|
+| **Google Gemini** (default) | [Google AI Studio](https://aistudio.google.com) | Yes |
+| Anthropic Claude | [Anthropic Console](https://console.anthropic.com) | No |
+| OpenAI | [OpenAI Platform](https://platform.openai.com) | No |
 
-#### Option 3: OpenAI
+<details>
+<summary>Manual setup (alternative)</summary>
 
-1. Go to [OpenAI Platform](https://platform.openai.com)
-2. Create an API key under API Keys
-3. Set the environment variable:
-   ```bash
-   export OPENAI_API_KEY="your-api-key-here"
-   ```
+Add your API key to `~/.zshrc` or `~/.bashrc`:
 
-### Configure Your Provider
+```bash
+export GEMINI_API_KEY="your-api-key-here"      # For Gemini (default)
+export ANTHROPIC_API_KEY="your-api-key-here"   # For Claude
+export OPENAI_API_KEY="your-api-key-here"      # For OpenAI
+```
 
-Edit `~/.albedo/config.toml` to set your preferred provider:
+Then reload: `source ~/.zshrc`
+
+To change provider, edit `~/.albedo/config.toml`:
 
 ```toml
 [llm]
-provider = "gemini"  # or "claude" or "openai"
-
-[llm.gemini]
-api_key_env = "GEMINI_API_KEY"
-model = "gemini-2.0-flash"
-
-[llm.claude]
-api_key_env = "ANTHROPIC_API_KEY"
-model = "claude-sonnet-4-20250514"
-
-[llm.openai]
-api_key_env = "OPENAI_API_KEY"
-model = "gpt-4o"
+provider = "claude"  # or "gemini" or "openai"
 ```
+
+</details>
 
 ## Example: Analyzing a Python CLI Todo App
 
@@ -253,15 +254,15 @@ All sessions (both `analyze` and `plan`) are stored in `~/.albedo/sessions/`:
     └── 2024-12-24_my-todo-app/     # Session folder (date + task slug)
         ├── session.json            # Session state and metadata
         ├── 00_domain_research.md   # Domain analysis
-        ├── 01_tech_stack.md        # Tech stack detection (skipped for greenfield)
-        ├── 02_architecture.md      # Architecture mapping (skipped for greenfield)
-        ├── 03_conventions.md       # Code conventions (skipped for greenfield)
-        ├── 04_feature_location.md  # Relevant code locations (skipped for greenfield)
-        ├── 05_impact_analysis.md   # Dependency tracing (skipped for greenfield)
+        ├── 01_tech_stack.md        # Tech stack recommendations
+        ├── 02_architecture.md      # Architecture design
+        ├── 03_conventions.md       # Code conventions (existing codebases only)
+        ├── 04_feature_location.md  # Relevant code locations (existing codebases only)
+        ├── 05_impact_analysis.md   # Dependency tracing (existing codebases only)
         └── FEATURE.md              # Final tickets and implementation plan
 ```
 
-For greenfield projects, only `00_domain_research.md` and `FEATURE.md` are generated since there's no codebase to analyze.
+For greenfield projects, phases 03-05 are skipped since there's no codebase to analyze. The tool generates domain research, tech stack recommendations, architecture design, and implementation tickets.
 
 ```bash
 # No folder needed - just run from anywhere
@@ -296,6 +297,10 @@ Planning greenfield project: shop_api
 ──────────────────────────────────────────────────
   ├─ Domain research...
   │  └─ ✓ Saved 00_domain_research.md
+  ├─ Tech stack...
+  │  └─ ✓ Saved 01_tech_stack.md
+  ├─ Architecture...
+  │  └─ ✓ Saved 02_architecture.md
   ├─ Change planning...
   │  └─ ✓ Saved FEATURE.md
 
