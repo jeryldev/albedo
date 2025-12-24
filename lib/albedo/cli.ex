@@ -477,7 +477,7 @@ defmodule Albedo.CLI do
   defp print_help do
     Owl.IO.puts([
       Owl.Data.tag("Albedo", :cyan),
-      " - Codebase-to-Tickets CLI Tool\n\n",
+      " - Ideas-to-Tickets CLI Tool\n\n",
       Owl.Data.tag("USAGE:", :yellow),
       "\n    albedo <command> [options]\n\n",
       Owl.Data.tag("COMMANDS:", :yellow),

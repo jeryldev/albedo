@@ -1,30 +1,35 @@
 defmodule Albedo do
   @moduledoc """
-  Albedo - Codebase-to-Tickets CLI Tool.
+  Albedo - Ideas-to-Tickets CLI Tool.
 
-  Given an unfamiliar codebase and a task description, Albedo systematically
-  investigates both the domain and the code, then produces a comprehensive,
-  actionable work breakdown with tickets.
+  Turn feature ideas into actionable implementation plans. Albedo works with
+  both existing codebases and new (greenfield) projects.
+
+  **For existing codebases:** Analyzes structure, conventions, and patterns
+  to generate implementation tickets with file-level guidance.
+
+  **For new projects:** Researches the domain, recommends tech stack and
+  architecture, and generates setup and implementation tickets.
 
   The name comes from alchemy - Albedo (whitening) represents purification
   and clarity, transforming confusion into understanding.
 
   ## Usage
 
-      # Initialize configuration
-      albedo init
+      # First-time setup
+      ./install.sh
 
-      # Analyze a codebase
+      # Analyze an existing codebase
       albedo analyze /path/to/codebase --task "Add user authentication"
+
+      # Plan a new project from scratch
+      albedo plan --name my_app --task "Build a todo app" --stack phoenix
 
       # Resume an incomplete session
       albedo resume ~/.albedo/sessions/2025-01-15_user-auth/
 
       # List sessions
       albedo sessions
-
-      # Show session output
-      albedo show 2025-01-15_user-auth
 
   ## Configuration
 

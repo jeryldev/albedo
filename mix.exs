@@ -15,7 +15,8 @@ defmodule Albedo.MixProject do
       releases: releases(),
       elixirc_paths: elixirc_paths(Mix.env()),
       name: "Albedo",
-      description: "Codebase-to-tickets CLI tool for systematic code analysis",
+      description:
+        "Ideas-to-tickets CLI tool - turn feature ideas into actionable implementation plans",
       package: package(),
       docs: docs(),
       aliases: aliases(),
