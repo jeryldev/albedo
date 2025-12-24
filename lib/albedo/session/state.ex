@@ -206,7 +206,7 @@ defmodule Albedo.Session.State do
   """
   def first_incomplete_phase(%__MODULE__{phases: phases}) do
     Enum.find(@phases, fn phase ->
-      phases[phase].status in [:pending, :failed]
+      phases[phase].status == :pending
     end)
   end
 

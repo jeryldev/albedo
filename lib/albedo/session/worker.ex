@@ -123,7 +123,8 @@ defmodule Albedo.Session.Worker do
     Logger.error("Agent failed for phase #{phase}: #{inspect(reason)}")
     state = State.fail_phase(state, phase, reason)
     State.save(state)
-    {:noreply, state}
+    print_phase_failed(phase, reason)
+    {:stop, :normal, state}
   end
 
   defp start_next_phase(state) do
@@ -307,5 +308,14 @@ defmodule Albedo.Session.Worker do
   defp print_phase_complete(phase) do
     output_file = State.phase_output_file(phase)
     Owl.IO.puts(Owl.Data.tag("  │  └─ ✓ Saved #{output_file}", :green))
+  end
+
+  defp print_phase_failed(phase, reason) do
+    phase_name = phase |> to_string() |> String.replace("_", " ") |> String.capitalize()
+    Owl.IO.puts(Owl.Data.tag("  │  └─ ✗ #{phase_name} failed: #{inspect(reason)}", :red))
+
+    Owl.IO.puts(
+      Owl.Data.tag("\nSession failed. You can retry with: albedo resume <session_path>", :yellow)
+    )
   end
 end

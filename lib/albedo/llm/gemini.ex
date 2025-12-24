@@ -43,7 +43,8 @@ defmodule Albedo.LLM.Gemini do
         }
       }
 
-      case Req.post(url, json: body) do
+      # 10 minute timeout for LLM requests (they can be slow for complex prompts)
+      case Req.post(url, json: body, receive_timeout: 600_000) do
         {:ok, %{status: 200, body: response_body}} ->
           parse_response(response_body)
 

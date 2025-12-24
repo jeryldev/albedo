@@ -159,8 +159,14 @@ defmodule Albedo.CLI do
         print_info("Output: #{result.output_path}")
         print_summary(result)
 
+      {:error, {:phase_failed, session_id, session_dir}} ->
+        print_error("Analysis failed during a phase")
+        print_info("Session: #{session_id}")
+        print_info("You can retry with: albedo resume #{session_dir}")
+        halt_with_error(1)
+
       {:error, reason} ->
-        print_error("Analysis failed: #{inspect(reason)}")
+        print_error("Analysis failed: #{format_error(reason)}")
         halt_with_error(1)
     end
   end
@@ -331,11 +337,32 @@ defmodule Albedo.CLI do
         print_info("Output: #{result.output_path}")
         print_greenfield_summary(result)
 
+      {:error, {:phase_failed, session_id, session_dir}} ->
+        print_error("Planning failed during a phase")
+        print_info("Session: #{session_id}")
+        print_info("You can retry with: albedo resume #{session_dir}")
+        halt_with_error(1)
+
       {:error, reason} ->
-        print_error("Planning failed: #{inspect(reason)}")
+        print_error("Planning failed: #{format_error(reason)}")
         halt_with_error(1)
     end
   end
+
+  defp format_error(:rate_limited) do
+    "API rate limit exceeded. Wait a minute and try again, or configure a fallback provider."
+  end
+
+  defp format_error(:no_fallback_configured) do
+    "Rate limited and no fallback provider configured. Add a fallback in ~/.albedo/config.toml"
+  end
+
+  defp format_error(:max_retries_exceeded),
+    do: "Request failed after retries. Check your network connection."
+
+  defp format_error(:timeout), do: "Request timed out. Check your network connection."
+  defp format_error({:http_error, status}), do: "HTTP error: #{status}"
+  defp format_error(reason), do: inspect(reason)
 
   defp print_header do
     Owl.IO.puts([

@@ -8,8 +8,9 @@ defmodule Albedo.LLM.Client do
 
   require Logger
 
-  @max_retries 3
-  @base_delay_ms 1000
+  # Only retry on transient network errors, not rate limits
+  @max_retries 2
+  @retry_delay_ms 2000
 
   @providers %{
     "gemini" => Gemini,
@@ -30,12 +31,12 @@ defmodule Albedo.LLM.Client do
     config = Config.load!()
     provider = opts[:provider] || Config.get(config, ["llm", "provider"])
 
-    case do_chat_with_retry(config, provider, prompt, opts, 0) do
+    case do_chat(config, provider, prompt, opts, 0) do
       {:ok, response} ->
         {:ok, response}
 
       {:error, :rate_limited} ->
-        Logger.warning("Primary provider rate limited, trying fallback")
+        Logger.warning("Rate limited by #{provider}. Trying fallback if configured...")
         try_fallback(config, prompt, opts)
 
       {:error, reason} ->
@@ -54,7 +55,7 @@ defmodule Albedo.LLM.Client do
     end
   end
 
-  defp do_chat_with_retry(config, provider, prompt, opts, attempt) when attempt < @max_retries do
+  defp do_chat(config, provider, prompt, opts, attempt) when attempt < @max_retries do
     provider_module = @providers[provider]
 
     if provider_module do
@@ -74,12 +75,26 @@ defmodule Albedo.LLM.Client do
           {:ok, response}
 
         {:error, :rate_limited} ->
-          delay = @base_delay_ms * :math.pow(2, attempt)
-          Logger.warning("Rate limited, retrying in #{trunc(delay)}ms (attempt #{attempt + 1})")
-          Process.sleep(trunc(delay))
-          do_chat_with_retry(config, provider, prompt, opts, attempt + 1)
+          # Don't retry rate limits - fail fast and try fallback
+          {:error, :rate_limited}
+
+        {:error, :timeout} ->
+          # Retry on timeout (transient network issue)
+          Logger.warning("Request timed out, retrying (attempt #{attempt + 1}/#{@max_retries})")
+          Process.sleep(@retry_delay_ms)
+          do_chat(config, provider, prompt, opts, attempt + 1)
+
+        {:error, {:http_error, status}} when status >= 500 ->
+          # Retry on server errors (5xx)
+          Logger.warning(
+            "Server error #{status}, retrying (attempt #{attempt + 1}/#{@max_retries})"
+          )
+
+          Process.sleep(@retry_delay_ms)
+          do_chat(config, provider, prompt, opts, attempt + 1)
 
         {:error, reason} ->
+          # Don't retry other errors
           {:error, reason}
       end
     else
@@ -87,7 +102,7 @@ defmodule Albedo.LLM.Client do
     end
   end
 
-  defp do_chat_with_retry(_config, _provider, _prompt, _opts, _attempt) do
+  defp do_chat(_config, _provider, _prompt, _opts, _attempt) do
     {:error, :max_retries_exceeded}
   end
 
@@ -96,7 +111,7 @@ defmodule Albedo.LLM.Client do
 
     if fallback_provider do
       Logger.info("Trying fallback provider: #{fallback_provider}")
-      do_chat_with_retry(config, fallback_provider, prompt, opts, 0)
+      do_chat(config, fallback_provider, prompt, opts, 0)
     else
       {:error, :no_fallback_configured}
     end

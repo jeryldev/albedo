@@ -9,7 +9,7 @@ defmodule Albedo.Agents.Base do
 
   defmacro __using__(_opts) do
     quote do
-      use GenServer
+      use GenServer, restart: :temporary
       @behaviour Albedo.Agents.Base
 
       require Logger
