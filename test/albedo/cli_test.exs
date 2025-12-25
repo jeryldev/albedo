@@ -68,12 +68,18 @@ defmodule Albedo.CLITest do
     test "displays initialization message" do
       output = run_cli_safely(["init"])
       assert output =~ "Albedo"
-      assert output =~ "install.sh"
+      assert output =~ "Config directory ready"
     end
 
     test "shows config file path on success" do
       output = run_cli_safely(["init"])
       assert output =~ "config.toml"
+    end
+
+    test "shows current configuration" do
+      output = run_cli_safely(["init"])
+      assert output =~ "Current configuration"
+      assert output =~ "Provider"
     end
   end
 

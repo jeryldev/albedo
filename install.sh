@@ -155,12 +155,7 @@ prompt_choice() {
   echo "${response:-$default}"
 }
 
-setup_api_key() {
-  echo ""
-  if ! prompt_yes_no "Would you like to set up an API key?" "y"; then
-    return 1
-  fi
-
+setup_provider_and_key() {
   echo ""
   echo "Albedo supports these LLM providers:"
   echo "  1. Gemini (recommended - free tier available)"
@@ -205,11 +200,47 @@ setup_api_key() {
   read -r -p "Enter your $PROVIDER_NAME API key (or press Enter to skip): " API_KEY
 
   if [[ -z "$API_KEY" ]]; then
-    print_info "Skipped API key setup."
-    return 1
+    print_info "Skipped API key setup. You can set it later with: albedo config set-key"
   fi
+}
 
-  return 0
+create_config() {
+  print_info "Creating configuration..."
+
+  # Create directories
+  mkdir -p "$HOME/.albedo/sessions"
+
+  # Create config.toml with selected provider
+  local config_file="$HOME/.albedo/config.toml"
+
+  cat > "$config_file" << EOF
+# Albedo Configuration
+# Generated on $(date +%Y-%m-%d)
+
+[llm]
+provider = "$PROVIDER"  # gemini | claude | openai
+temperature = 0.3  # Lower = more deterministic
+
+[output]
+session_dir = "~/.albedo/sessions"
+
+[search]
+tool = "ripgrep"
+max_results_per_pattern = 50
+exclude_patterns = [
+  "node_modules",
+  "_build",
+  "deps",
+  ".git",
+  "priv/static"
+]
+
+[agents]
+timeout = 300  # Timeout for each agent in seconds
+EOF
+
+  print_success "Config created at $config_file"
+  print_success "Provider set to: $PROVIDER"
 }
 
 setup_shell_profile() {
@@ -224,10 +255,6 @@ setup_shell_profile() {
   echo "The following will be added to $shell_profile:"
   echo ""
   echo -e "  ${CYAN}# Added by Albedo${NC}"
-
-  if [[ -n "$PROVIDER" ]]; then
-    echo -e "  ${CYAN}export ALBEDO_PROVIDER=\"$PROVIDER\"${NC}"
-  fi
 
   if [[ -n "$API_KEY" ]]; then
     # Show masked key
@@ -252,16 +279,15 @@ setup_shell_profile() {
     local content
     content=$(cat "$shell_profile")
 
-    if [[ -n "$PROVIDER" ]] && ! grep -q "ALBEDO_PROVIDER" "$shell_profile"; then
-      lines_to_add+="export ALBEDO_PROVIDER=\"$PROVIDER\"\n"
-    else
-      ((skipped++)) || true
-    fi
-
-    if [[ -n "$API_KEY" ]] && ! grep -q "$API_KEY_VAR" "$shell_profile"; then
-      lines_to_add+="export $API_KEY_VAR=\"$API_KEY\"\n"
-    else
-      ((skipped++)) || true
+    if [[ -n "$API_KEY" ]]; then
+      if grep -q "^export $API_KEY_VAR=" "$shell_profile"; then
+        # Replace existing line
+        sed -i.bak "s|^export $API_KEY_VAR=.*|export $API_KEY_VAR=\"$API_KEY\"|" "$shell_profile"
+        rm -f "${shell_profile}.bak"
+        print_info "Replaced existing $API_KEY_VAR"
+      else
+        lines_to_add+="export $API_KEY_VAR=\"$API_KEY\"\n"
+      fi
     fi
 
     if ! grep -q "PATH.*albedo" "$shell_profile"; then
@@ -270,9 +296,6 @@ setup_shell_profile() {
       ((skipped++)) || true
     fi
   else
-    if [[ -n "$PROVIDER" ]]; then
-      lines_to_add+="export ALBEDO_PROVIDER=\"$PROVIDER\"\n"
-    fi
     if [[ -n "$API_KEY" ]]; then
       lines_to_add+="export $API_KEY_VAR=\"$API_KEY\"\n"
     fi
@@ -291,12 +314,6 @@ setup_shell_profile() {
   fi
 
   SHELL_PROFILE="$shell_profile"
-}
-
-create_config_dir() {
-  print_info "Creating config directory..."
-  mkdir -p "$HOME/.albedo/sessions"
-  print_success "Config directory created at ~/.albedo/"
 }
 
 print_completion() {
@@ -323,11 +340,22 @@ print_completion() {
   fi
 
   echo ""
+  echo "Configuration:"
+  echo -e "  Provider:    ${CYAN}$PROVIDER${NC}"
+  echo -e "  Config:      ${CYAN}~/.albedo/config.toml${NC}"
+  echo -e "  Sessions:    ${CYAN}~/.albedo/sessions/${NC}"
+  echo ""
   echo "Quick start:"
   echo -e "  ${CYAN}albedo --help${NC}                          # Show help"
+  echo -e "  ${CYAN}albedo config${NC}                          # View configuration"
   echo -e "  ${CYAN}albedo analyze . --task \"Add feature\"${NC}  # Analyze codebase"
   echo -e "  ${CYAN}albedo plan --name myapp --task \"...\"${NC}  # Plan new project"
   echo ""
+
+  if [[ -z "$API_KEY" ]]; then
+    echo -e "${YELLOW}Note: API key not set. Run 'albedo config set-key' to set it.${NC}"
+    echo ""
+  fi
 }
 
 main() {
@@ -338,15 +366,17 @@ main() {
 
   check_prerequisites
   build_albedo
-  create_config_dir
 
-  # API key setup (sets PROVIDER, API_KEY, API_KEY_VAR)
-  PROVIDER=""
+  # Provider and API key setup
+  PROVIDER="gemini"
   API_KEY=""
-  API_KEY_VAR=""
-  setup_api_key || true
+  API_KEY_VAR="GEMINI_API_KEY"
+  setup_provider_and_key
 
-  # Shell profile setup
+  # Create config.toml with selected provider
+  create_config
+
+  # Shell profile setup (API key + PATH)
   SHELL_PROFILE=""
   setup_shell_profile
 

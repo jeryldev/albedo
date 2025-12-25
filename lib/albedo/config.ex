@@ -1,20 +1,16 @@
 defmodule Albedo.Config do
   @moduledoc """
   Configuration management for Albedo.
-  Loads and manages configuration from ~/.albedo/config.toml
+
+  Single source of truth:
+  - Provider: ~/.albedo/config.toml
+  - API keys: Environment variables in shell profile
   """
 
   @default_config %{
     "llm" => %{
       "provider" => "gemini",
-      "api_key_env" => "GEMINI_API_KEY",
-      "model" => "gemini-2.0-flash",
-      "temperature" => 0.3,
-      "fallback" => %{
-        "provider" => "claude",
-        "api_key_env" => "ANTHROPIC_API_KEY",
-        "model" => "claude-sonnet-4-20250514"
-      }
+      "temperature" => 0.3
     },
     "output" => %{
       "session_dir" => "~/.albedo/sessions"
@@ -31,9 +27,14 @@ defmodule Albedo.Config do
       ]
     },
     "agents" => %{
-      "timeout" => 300,
-      "max_parallel" => 5
+      "timeout" => 300
     }
+  }
+
+  @providers %{
+    "gemini" => %{env_var: "GEMINI_API_KEY", model: "gemini-2.0-flash"},
+    "claude" => %{env_var: "ANTHROPIC_API_KEY", model: "claude-sonnet-4-20250514"},
+    "openai" => %{env_var: "OPENAI_API_KEY", model: "gpt-4o"}
   }
 
   @config_dir Path.expand("~/.albedo")
@@ -42,6 +43,8 @@ defmodule Albedo.Config do
   def config_dir, do: @config_dir
   def config_file, do: @config_file
   def sessions_dir, do: Path.join(@config_dir, "sessions")
+
+  def valid_providers, do: Map.keys(@providers)
 
   @doc """
   Load configuration from file or return defaults.
@@ -84,46 +87,47 @@ defmodule Albedo.Config do
   end
 
   @doc """
-  Get the current LLM provider.
-  Priority: ALBEDO_PROVIDER env var > config.toml
+  Get the current LLM provider from config.toml.
   """
   def provider(config) do
-    case System.get_env("ALBEDO_PROVIDER") do
-      nil -> get(config, ["llm", "provider"])
-      provider -> provider
+    get(config, ["llm", "provider"]) || "gemini"
+  end
+
+  @doc """
+  Get the environment variable name for a provider.
+  """
+  def env_var_for_provider(provider) do
+    case @providers[provider] do
+      %{env_var: env_var} -> env_var
+      nil -> "GEMINI_API_KEY"
     end
   end
 
   @doc """
-  Get the API key for a provider from environment variables.
+  Get the API key for the current provider from environment variables.
   """
-  def api_key(config, provider_override \\ nil) do
-    provider = provider_override || provider(config)
-    env_var = get_api_key_env(config, provider)
+  def api_key(config) do
+    provider = provider(config)
+    api_key_for_provider(provider)
+  end
+
+  @doc """
+  Get the API key for a specific provider from environment variables.
+  """
+  def api_key_for_provider(provider) do
+    env_var = env_var_for_provider(provider)
     System.get_env(env_var)
   end
 
-  defp get_api_key_env(config, provider) do
-    primary_provider = get(config, ["llm", "provider"])
-
-    if provider == primary_provider do
-      get(config, ["llm", "api_key_env"])
-    else
-      get(config, ["llm", "fallback", "api_key_env"])
-    end
-  end
-
   @doc """
-  Get the model for a provider.
+  Get the model for the current provider.
   """
-  def model(config, provider_override \\ nil) do
-    provider = provider_override || provider(config)
-    primary_provider = get(config, ["llm", "provider"])
+  def model(config) do
+    provider = provider(config)
 
-    if provider == primary_provider do
-      get(config, ["llm", "model"])
-    else
-      get(config, ["llm", "fallback", "model"])
+    case @providers[provider] do
+      %{model: model} -> model
+      nil -> "gemini-2.0-flash"
     end
   end
 
@@ -167,6 +171,32 @@ defmodule Albedo.Config do
     end
   end
 
+  @doc """
+  Update the provider in config.toml.
+  """
+  def set_provider(provider) when provider in ["gemini", "claude", "openai"] do
+    case File.read(@config_file) do
+      {:ok, content} ->
+        updated = update_provider_in_toml(content, provider)
+        File.write(@config_file, updated)
+
+      {:error, :enoent} ->
+        content = generate_config_toml(provider)
+        File.mkdir_p!(@config_dir)
+        File.write(@config_file, content)
+    end
+  end
+
+  def set_provider(_provider), do: {:error, :invalid_provider}
+
+  defp update_provider_in_toml(content, provider) do
+    if Regex.match?(~r/^provider\s*=\s*"[^"]*"/m, content) do
+      Regex.replace(~r/^provider\s*=\s*"[^"]*"/m, content, "provider = \"#{provider}\"")
+    else
+      content <> "\n[llm]\nprovider = \"#{provider}\"\n"
+    end
+  end
+
   defp ensure_dir(dir) do
     case File.mkdir_p(dir) do
       :ok -> :ok
@@ -178,32 +208,25 @@ defmodule Albedo.Config do
     if File.exists?(@config_file) do
       :ok
     else
-      content = generate_default_config_toml()
+      content = generate_config_toml("gemini")
       File.write(@config_file, content)
     end
   end
 
-  defp generate_default_config_toml do
+  defp generate_config_toml(provider) do
     """
     # Albedo Configuration
     # Generated on #{Date.utc_today()}
 
     [llm]
-    provider = "gemini"  # gemini | claude | openai
-    api_key_env = "GEMINI_API_KEY"  # Environment variable name
-    model = "gemini-2.0-flash"  # Model to use
+    provider = "#{provider}"  # gemini | claude | openai
     temperature = 0.3  # Lower = more deterministic
-
-    [llm.fallback]
-    provider = "claude"
-    api_key_env = "ANTHROPIC_API_KEY"
-    model = "claude-sonnet-4-20250514"
 
     [output]
     session_dir = "~/.albedo/sessions"
 
     [search]
-    tool = "ripgrep"  # ripgrep | grep | native
+    tool = "ripgrep"
     max_results_per_pattern = 50
     exclude_patterns = [
       "node_modules",
@@ -215,7 +238,6 @@ defmodule Albedo.Config do
 
     [agents]
     timeout = 300  # Timeout for each agent in seconds
-    max_parallel = 5  # Maximum parallel agents
     """
   end
 

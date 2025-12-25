@@ -1,6 +1,6 @@
 defmodule Albedo.LLM.Client do
   @moduledoc """
-  Provider-agnostic LLM client with retry logic and fallback support.
+  Provider-agnostic LLM client with retry logic.
   """
 
   alias Albedo.Config
@@ -8,7 +8,6 @@ defmodule Albedo.LLM.Client do
 
   require Logger
 
-  # Only retry on transient network errors, not rate limits
   @max_retries 2
   @retry_delay_ms 2000
 
@@ -22,22 +21,16 @@ defmodule Albedo.LLM.Client do
   Send a chat request to the configured LLM provider.
 
   Options:
-    - :provider - Override the provider (default: from config)
     - :model - Override the model (default: from config)
     - :temperature - Override temperature (default: from config)
     - :max_tokens - Maximum tokens in response (default: provider-specific)
   """
   def chat(prompt, opts \\ []) do
     config = Config.load!()
-    provider = opts[:provider] || Config.provider(config)
 
-    case do_chat(config, provider, prompt, opts, 0) do
+    case do_chat(config, prompt, opts, 0) do
       {:ok, response} ->
         {:ok, response}
-
-      {:error, :rate_limited} ->
-        Logger.warning("Rate limited by #{provider}. Trying fallback if configured...")
-        try_fallback(config, prompt, opts)
 
       {:error, reason} ->
         Logger.error("LLM request failed: #{inspect(reason)}")
@@ -55,12 +48,13 @@ defmodule Albedo.LLM.Client do
     end
   end
 
-  defp do_chat(config, provider, prompt, opts, attempt) when attempt < @max_retries do
+  defp do_chat(config, prompt, opts, attempt) when attempt < @max_retries do
+    provider = Config.provider(config)
     provider_module = @providers[provider]
 
     if provider_module do
-      api_key = Config.api_key(config, provider)
-      model = opts[:model] || Config.model(config, provider)
+      api_key = Config.api_key(config)
+      model = opts[:model] || Config.model(config)
       temperature = opts[:temperature] || Config.temperature(config)
 
       request_opts = [
@@ -75,30 +69,27 @@ defmodule Albedo.LLM.Client do
           {:ok, response}
 
         {:error, :rate_limited} ->
-          # Don't retry rate limits - fail fast and try fallback
           {:error, :rate_limited}
 
         {:error, :timeout} ->
-          retry_with_log(config, provider, prompt, opts, attempt, "Request timed out")
+          retry_with_log(config, prompt, opts, attempt, "Request timed out")
 
         {:error, {:request_failed, %{reason: :timeout}}} ->
-          retry_with_log(config, provider, prompt, opts, attempt, "Connection timed out")
+          retry_with_log(config, prompt, opts, attempt, "Connection timed out")
 
         {:error, {:request_failed, %{reason: :econnrefused}}} ->
-          retry_with_log(config, provider, prompt, opts, attempt, "Connection refused")
+          retry_with_log(config, prompt, opts, attempt, "Connection refused")
 
         {:error, {:request_failed, _}} ->
-          # Network error - retry
-          retry_with_log(config, provider, prompt, opts, attempt, "Network error")
+          retry_with_log(config, prompt, opts, attempt, "Network error")
 
         {:error, {:http_error, status, _}} when status >= 500 ->
-          retry_with_log(config, provider, prompt, opts, attempt, "Server error #{status}")
+          retry_with_log(config, prompt, opts, attempt, "Server error #{status}")
 
         {:error, {:http_error, status}} when status >= 500 ->
-          retry_with_log(config, provider, prompt, opts, attempt, "Server error #{status}")
+          retry_with_log(config, prompt, opts, attempt, "Server error #{status}")
 
         {:error, reason} ->
-          # Don't retry other errors
           {:error, reason}
       end
     else
@@ -106,33 +97,21 @@ defmodule Albedo.LLM.Client do
     end
   end
 
-  defp do_chat(_config, _provider, _prompt, _opts, _attempt) do
+  defp do_chat(_config, _prompt, _opts, _attempt) do
     {:error, :max_retries_exceeded}
   end
 
-  defp retry_with_log(config, provider, prompt, opts, attempt, message) do
+  defp retry_with_log(config, prompt, opts, attempt, message) do
     Logger.warning("#{message}, retrying (attempt #{attempt + 1}/#{@max_retries})")
     Process.sleep(@retry_delay_ms)
-    do_chat(config, provider, prompt, opts, attempt + 1)
-  end
-
-  defp try_fallback(config, prompt, opts) do
-    fallback_provider = Config.get(config, ["llm", "fallback", "provider"])
-
-    if fallback_provider do
-      Logger.info("Trying fallback provider: #{fallback_provider}")
-      do_chat(config, fallback_provider, prompt, opts, 0)
-    else
-      {:error, :no_fallback_configured}
-    end
+    do_chat(config, prompt, opts, attempt + 1)
   end
 
   @doc """
   Check if a provider is available (has API key configured).
   """
   def provider_available?(provider) do
-    config = Config.load!()
-    api_key = Config.api_key(config, provider)
+    api_key = Config.api_key_for_provider(provider)
     api_key != nil && api_key != ""
   end
 

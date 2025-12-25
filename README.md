@@ -74,12 +74,14 @@ mix deps.get
 mix escript.build
 
 # Add to ~/.zshrc or ~/.bashrc
-export ALBEDO_PROVIDER="gemini"           # gemini | claude | openai
 export GEMINI_API_KEY="your-api-key"      # Your API key
 export PATH="$PATH:/path/to/albedo"       # Add to PATH
 ```
 
 Then run: `source ~/.zshrc`
+
+Provider is configured in `~/.albedo/config.toml` (created on first run).
+Use `albedo config set-provider` to change providers.
 
 </details>
 

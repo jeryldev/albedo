@@ -4,10 +4,10 @@ defmodule Albedo.ConfigTest do
   alias Albedo.Config
 
   describe "default configuration" do
-    test "load returns default config when no file exists" do
+    test "load returns config with expected structure" do
       assert {:ok, config} = Config.load()
-      assert config["llm"]["provider"] == "gemini"
-      assert config["llm"]["model"] == "gemini-2.0-flash"
+      # Provider can be any valid value (gemini, claude, openai)
+      assert config["llm"]["provider"] in ["gemini", "claude", "openai"]
       assert config["output"]["session_dir"] == "~/.albedo/sessions"
     end
   end
@@ -29,31 +29,44 @@ defmodule Albedo.ConfigTest do
     end
   end
 
-  describe "model/2" do
-    test "returns primary model for primary provider" do
-      config = %{
-        "llm" => %{
-          "provider" => "gemini",
-          "model" => "gemini-2.0-flash"
-        }
-      }
-
-      assert Config.model(config, "gemini") == "gemini-2.0-flash"
+  describe "provider/1" do
+    test "returns provider from config" do
+      config = %{"llm" => %{"provider" => "openai"}}
+      assert Config.provider(config) == "openai"
     end
 
-    test "returns fallback model for fallback provider" do
-      config = %{
-        "llm" => %{
-          "provider" => "gemini",
-          "model" => "gemini-2.0-flash",
-          "fallback" => %{
-            "provider" => "claude",
-            "model" => "claude-sonnet-4-20250514"
-          }
-        }
-      }
+    test "returns gemini as default" do
+      config = %{"llm" => %{}}
+      assert Config.provider(config) == "gemini"
+    end
+  end
 
-      assert Config.model(config, "claude") == "claude-sonnet-4-20250514"
+  describe "model/1" do
+    test "returns correct model for gemini provider" do
+      config = %{"llm" => %{"provider" => "gemini"}}
+      assert Config.model(config) == "gemini-2.0-flash"
+    end
+
+    test "returns correct model for claude provider" do
+      config = %{"llm" => %{"provider" => "claude"}}
+      assert Config.model(config) == "claude-sonnet-4-20250514"
+    end
+
+    test "returns correct model for openai provider" do
+      config = %{"llm" => %{"provider" => "openai"}}
+      assert Config.model(config) == "gpt-4o"
+    end
+  end
+
+  describe "env_var_for_provider/1" do
+    test "returns correct env var for each provider" do
+      assert Config.env_var_for_provider("gemini") == "GEMINI_API_KEY"
+      assert Config.env_var_for_provider("claude") == "ANTHROPIC_API_KEY"
+      assert Config.env_var_for_provider("openai") == "OPENAI_API_KEY"
+    end
+
+    test "returns gemini env var for unknown provider" do
+      assert Config.env_var_for_provider("unknown") == "GEMINI_API_KEY"
     end
   end
 
@@ -90,6 +103,15 @@ defmodule Albedo.ConfigTest do
     test "returns default timeout when not configured" do
       config = %{"agents" => %{}}
       assert Config.agent_timeout(config) == 300
+    end
+  end
+
+  describe "valid_providers/0" do
+    test "returns list of valid providers" do
+      providers = Config.valid_providers()
+      assert "gemini" in providers
+      assert "claude" in providers
+      assert "openai" in providers
     end
   end
 end

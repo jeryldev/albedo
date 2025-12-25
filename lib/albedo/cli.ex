@@ -129,15 +129,37 @@ defmodule Albedo.CLI do
 
   defp cmd_init do
     print_header()
-    print_info("For first-time setup, run: ./install.sh")
-    print_info("This command is for reconfiguration only.")
-    IO.puts("")
 
     case Config.init() do
       {:ok, config_file} ->
         print_success("Config directory ready!")
         print_info("Config file: #{config_file}")
         print_info("Sessions dir: #{Config.sessions_dir()}")
+        IO.puts("")
+
+        config = Config.load!()
+        provider = Config.provider(config)
+        api_key = Config.api_key(config)
+
+        IO.puts("Current configuration:")
+        IO.puts("  Provider: #{provider}")
+
+        if api_key do
+          print_success("API key is set")
+        else
+          env_var = Config.env_var_for_provider(provider)
+          Owl.IO.puts(["  API Key: ", Owl.Data.tag("NOT SET", :red)])
+          IO.puts("")
+          print_info("To set your API key, run:")
+          IO.puts("  albedo config set-key")
+          IO.puts("")
+          print_info("Or manually add to your shell profile:")
+          IO.puts("  export #{env_var}=\"your-api-key\"")
+        end
+
+        IO.puts("")
+        print_info("To change provider: albedo config set-provider")
+        print_info("To view config:     albedo config")
 
       {:error, reason} ->
         print_error("Failed to initialize: #{inspect(reason)}")
@@ -409,38 +431,33 @@ defmodule Albedo.CLI do
 
     choice = IO.gets("Enter choice [1]: ") |> String.trim()
 
-    {provider, env_var, model} =
+    provider =
       case choice do
-        "2" -> {"claude", "ANTHROPIC_API_KEY", "claude-sonnet-4-20250514"}
-        "3" -> {"openai", "OPENAI_API_KEY", "gpt-4o"}
-        _ -> {"gemini", "GEMINI_API_KEY", "gemini-2.0-flash"}
+        "2" -> "claude"
+        "3" -> "openai"
+        _ -> "gemini"
       end
 
-    shell_profile = detect_shell_profile()
-    export_line = "export ALBEDO_PROVIDER=\"#{provider}\""
+    env_var = Config.env_var_for_provider(provider)
 
     IO.puts("")
-    IO.puts("This will add to #{shell_profile}:")
-    Owl.IO.puts(Owl.Data.tag("  #{export_line}", :cyan))
+    IO.puts("This will update #{Config.config_file()}:")
+    Owl.IO.puts(Owl.Data.tag("  provider = \"#{provider}\"", :cyan))
     IO.puts("")
 
     confirm = IO.gets("Proceed? [Y/n]: ") |> String.trim() |> String.downcase()
 
     if confirm in ["", "y", "yes"] do
-      case append_to_shell_profile(shell_profile, "ALBEDO_PROVIDER", export_line) do
-        {:ok, :replaced} ->
-          print_success("Replaced ALBEDO_PROVIDER in #{shell_profile}")
+      case Config.set_provider(provider) do
+        :ok ->
+          print_success("Provider set to #{provider}")
           IO.puts("")
-          print_info("Run: source #{shell_profile}")
-          print_info("Make sure you have #{env_var} set for the #{provider} provider.")
-          print_info("Expected model: #{model}")
+          print_info("Make sure you have #{env_var} set in your shell profile.")
+          print_info("Run: albedo config set-key")
 
-        {:ok, :added} ->
-          print_success("Added ALBEDO_PROVIDER to #{shell_profile}")
-          IO.puts("")
-          print_info("Run: source #{shell_profile}")
-          print_info("Make sure you have #{env_var} set for the #{provider} provider.")
-          print_info("Expected model: #{model}")
+        {:error, reason} ->
+          print_error("Failed to update config: #{inspect(reason)}")
+          halt_with_error(1)
       end
     else
       print_info("Cancelled.")
@@ -450,24 +467,15 @@ defmodule Albedo.CLI do
   defp cmd_config(["set-key" | _]) do
     print_header()
 
-    IO.puts("Set API key for which provider?")
-    IO.puts("")
-    IO.puts("  1. Gemini")
-    IO.puts("  2. Claude")
-    IO.puts("  3. OpenAI")
+    config = Config.load!()
+    provider = Config.provider(config)
+    env_var = Config.env_var_for_provider(provider)
+
+    IO.puts("Current provider: #{provider}")
+    IO.puts("Environment variable: #{env_var}")
     IO.puts("")
 
-    choice = IO.gets("Enter choice [1]: ") |> String.trim()
-
-    {provider, env_var} =
-      case choice do
-        "2" -> {"Claude", "ANTHROPIC_API_KEY"}
-        "3" -> {"OpenAI", "OPENAI_API_KEY"}
-        _ -> {"Gemini", "GEMINI_API_KEY"}
-      end
-
-    IO.puts("")
-    api_key = IO.gets("Enter your #{provider} API key: ") |> String.trim()
+    api_key = IO.gets("Enter your API key: ") |> String.trim()
 
     if api_key == "" do
       print_info("Cancelled.")
@@ -562,11 +570,11 @@ defmodule Albedo.CLI do
   end
 
   defp format_error(:rate_limited) do
-    "API rate limit exceeded. Wait a minute and try again, or configure a fallback provider."
+    "API rate limit exceeded. Wait a minute and try again."
   end
 
-  defp format_error(:no_fallback_configured) do
-    "Rate limited and no fallback provider configured. Add a fallback in ~/.albedo/config.toml"
+  defp format_error(:invalid_api_key) do
+    "Invalid API key. Run 'albedo config set-key' to set your API key."
   end
 
   defp format_error(:max_retries_exceeded),
@@ -678,9 +686,8 @@ defmodule Albedo.CLI do
   defp print_next_steps(result) do
     IO.puts("")
     Owl.IO.puts(Owl.Data.tag("Next Steps:", :cyan))
-    IO.puts("  1. View the plan:        cat #{result.output_path}")
-    IO.puts("  2. Go to session folder: cd #{Path.dirname(result.output_path)}")
-    IO.puts("  3. View in CLI:          albedo show #{result.session_id}")
+    IO.puts("  1. View the plan:        albedo show #{result.session_id}")
+    IO.puts("  2. Go to session folder: cd $(albedo path #{result.session_id})")
   end
 
   defp print_invalid_args(invalid) do

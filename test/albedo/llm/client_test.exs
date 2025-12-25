@@ -17,17 +17,11 @@ defmodule Albedo.LLM.ClientTest do
     end
   end
 
-  describe "chat/2" do
-    test "returns error for unknown provider" do
-      result = Client.chat("test", provider: "unknown_provider")
-      assert {:error, {:unknown_provider, "unknown_provider"}} = result
-    end
-  end
-
   describe "chat!/2" do
-    test "raises for unknown provider" do
+    test "raises when API key is missing" do
+      # This will fail because the test doesn't have real API keys set
       assert_raise Albedo.Errors.LLMError, fn ->
-        Client.chat!("test", provider: "unknown_provider")
+        Client.chat!("test")
       end
     end
   end
