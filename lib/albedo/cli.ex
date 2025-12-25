@@ -4,7 +4,8 @@ defmodule Albedo.CLI do
   Parses arguments and dispatches to appropriate commands.
   """
 
-  alias Albedo.{Config, Session}
+  alias Albedo.{Config, Session, Tickets}
+  alias Albedo.Tickets.Exporter
 
   @version Mix.Project.config()[:version]
 
@@ -37,16 +38,22 @@ defmodule Albedo.CLI do
           stack: :string,
           database: :string,
           name: :string,
-          session: :string
+          session: :string,
+          status: :string,
+          json: :boolean,
+          format: :string,
+          output: :string,
+          all: :boolean
         ],
         aliases: [
           h: :help,
           v: :version,
           t: :task,
           i: :interactive,
-          s: :scope,
           n: :name,
-          S: :session
+          s: :session,
+          f: :format,
+          o: :output
         ]
       )
 
@@ -119,6 +126,24 @@ defmodule Albedo.CLI do
     print_info("Usage: albedo path <session_id>")
     print_info("Then:  cd $(albedo path <session_id>)")
     halt_with_error(1)
+  end
+
+  defp run_command(["tickets" | subcommand], opts) do
+    {extra_opts, remaining, _} =
+      OptionParser.parse(subcommand,
+        strict: [
+          session: :string,
+          status: :string,
+          json: :boolean,
+          format: :string,
+          output: :string,
+          all: :boolean
+        ],
+        aliases: [s: :session, f: :format, o: :output]
+      )
+
+    merged_opts = Keyword.merge(opts, extra_opts)
+    cmd_tickets(remaining, merged_opts)
   end
 
   defp run_command([unknown | _], _opts) do
@@ -531,6 +556,397 @@ defmodule Albedo.CLI do
     end
   end
 
+  defp cmd_tickets([], opts) do
+    cmd_tickets(["list"], opts)
+  end
+
+  defp cmd_tickets(["list" | _], opts) do
+    print_header()
+    session_dir = resolve_session_dir(opts)
+
+    case Tickets.load(session_dir) do
+      {:ok, data} ->
+        tickets = Tickets.list(data, Keyword.take(opts, [:status]))
+        print_ticket_list(data, tickets)
+
+      {:error, :not_found} ->
+        print_error("No tickets.json found for this session")
+        print_info("Run 'albedo analyze' first to generate tickets")
+        halt_with_error(1)
+
+      {:error, reason} ->
+        print_error("Failed to load tickets: #{inspect(reason)}")
+        halt_with_error(1)
+    end
+  end
+
+  defp cmd_tickets(["show", id | _], opts) do
+    print_header()
+    session_dir = resolve_session_dir(opts)
+
+    case Tickets.load(session_dir) do
+      {:ok, data} ->
+        case Tickets.get(data, id) do
+          nil ->
+            print_error("Ticket ##{id} not found")
+            halt_with_error(1)
+
+          ticket ->
+            if opts[:json] do
+              ticket |> Tickets.Ticket.to_json() |> Jason.encode!(pretty: true) |> IO.puts()
+            else
+              print_ticket_detail(ticket)
+            end
+        end
+
+      {:error, :not_found} ->
+        print_error("No tickets.json found for this session")
+        halt_with_error(1)
+
+      {:error, reason} ->
+        print_error("Failed to load tickets: #{inspect(reason)}")
+        halt_with_error(1)
+    end
+  end
+
+  defp cmd_tickets(["start", id | _], opts) do
+    update_ticket_status(id, :start, opts)
+  end
+
+  defp cmd_tickets(["done" | ids], opts) do
+    Enum.each(ids, fn id ->
+      update_ticket_status(id, :complete, opts)
+    end)
+  end
+
+  defp cmd_tickets(["reset" | ids], opts) do
+    if opts[:all] do
+      reset_all_tickets(opts)
+    else
+      Enum.each(ids, fn id ->
+        update_ticket_status(id, :reset, opts)
+      end)
+    end
+  end
+
+  defp cmd_tickets(["export" | _], opts) do
+    export_tickets(opts)
+  end
+
+  defp cmd_tickets([unknown | _], _opts) do
+    print_error("Unknown tickets subcommand: #{unknown}")
+    IO.puts("")
+    IO.puts("Available subcommands:")
+    IO.puts("  albedo tickets                  List tickets from most recent session")
+    IO.puts("  albedo tickets --session <id>   List tickets from specific session")
+    IO.puts("  albedo tickets --status pending Filter by status")
+    IO.puts("  albedo tickets show <id>        Show ticket details")
+    IO.puts("  albedo tickets start <id>       Mark ticket as in_progress")
+    IO.puts("  albedo tickets done <id> [ids]  Mark tickets as completed")
+    IO.puts("  albedo tickets reset <id>       Reset ticket to pending")
+    IO.puts("  albedo tickets reset --all      Reset all tickets")
+
+    IO.puts(
+      "  albedo tickets export           Export tickets (--format json|csv|markdown|github)"
+    )
+
+    halt_with_error(1)
+  end
+
+  defp update_ticket_status(id, action, opts) do
+    session_dir = resolve_session_dir(opts)
+
+    case Tickets.load(session_dir) do
+      {:ok, data} ->
+        action_fn =
+          case action do
+            :start -> &Tickets.start/2
+            :complete -> &Tickets.complete/2
+            :reset -> &Tickets.reset/2
+          end
+
+        case action_fn.(data, id) do
+          {:ok, updated_data, ticket} ->
+            case Tickets.save(session_dir, updated_data) do
+              :ok ->
+                action_str =
+                  case action do
+                    :start -> "started"
+                    :complete -> "completed"
+                    :reset -> "reset"
+                  end
+
+                print_success("Ticket ##{id} #{action_str}: #{ticket.title}")
+
+              {:error, reason} ->
+                print_error("Failed to save: #{inspect(reason)}")
+                halt_with_error(1)
+            end
+
+          {:error, :not_found} ->
+            print_error("Ticket ##{id} not found")
+            halt_with_error(1)
+        end
+
+      {:error, :not_found} ->
+        print_error("No tickets.json found for this session")
+        halt_with_error(1)
+
+      {:error, reason} ->
+        print_error("Failed to load tickets: #{inspect(reason)}")
+        halt_with_error(1)
+    end
+  end
+
+  defp reset_all_tickets(opts) do
+    session_dir = resolve_session_dir(opts)
+
+    case Tickets.load(session_dir) do
+      {:ok, data} ->
+        updated_data = Tickets.reset_all(data)
+
+        case Tickets.save(session_dir, updated_data) do
+          :ok ->
+            print_success("All tickets reset to pending")
+
+          {:error, reason} ->
+            print_error("Failed to save: #{inspect(reason)}")
+            halt_with_error(1)
+        end
+
+      {:error, :not_found} ->
+        print_error("No tickets.json found for this session")
+        halt_with_error(1)
+
+      {:error, reason} ->
+        print_error("Failed to load tickets: #{inspect(reason)}")
+        halt_with_error(1)
+    end
+  end
+
+  defp export_tickets(opts) do
+    print_header()
+    session_dir = resolve_session_dir(opts)
+
+    format_str = opts[:format] || "json"
+
+    format =
+      case format_str do
+        "json" ->
+          :json
+
+        "csv" ->
+          :csv
+
+        "markdown" ->
+          :markdown
+
+        "md" ->
+          :markdown
+
+        "github" ->
+          :github
+
+        other ->
+          print_error("Unknown format: #{other}")
+          print_info("Available formats: json, csv, markdown, github")
+          halt_with_error(1)
+      end
+
+    case Tickets.load(session_dir) do
+      {:ok, data} ->
+        export_opts =
+          if opts[:status], do: [status: String.to_existing_atom(opts[:status])], else: []
+
+        case Exporter.export(data, format, export_opts) do
+          {:ok, content} ->
+            output_path = opts[:output]
+
+            if output_path do
+              case File.write(output_path, content) do
+                :ok ->
+                  print_success("Exported #{length(data.tickets)} tickets to #{output_path}")
+                  print_info("Format: #{Exporter.format_name(format)}")
+
+                {:error, reason} ->
+                  print_error("Failed to write file: #{inspect(reason)}")
+                  halt_with_error(1)
+              end
+            else
+              IO.puts(content)
+            end
+
+          {:error, reason} ->
+            print_error("Export failed: #{inspect(reason)}")
+            halt_with_error(1)
+        end
+
+      {:error, :not_found} ->
+        print_error("No tickets.json found for this session")
+        halt_with_error(1)
+
+      {:error, reason} ->
+        print_error("Failed to load tickets: #{inspect(reason)}")
+        halt_with_error(1)
+    end
+  end
+
+  defp resolve_session_dir(opts) do
+    case opts[:session] do
+      nil ->
+        config = Config.load!()
+        sessions_dir = Config.session_dir(config)
+
+        case File.ls(sessions_dir) do
+          {:ok, sessions} when sessions != [] ->
+            most_recent = sessions |> Enum.sort(:desc) |> List.first()
+            Path.join(sessions_dir, most_recent)
+
+          _ ->
+            print_error("No sessions found")
+            halt_with_error(1)
+        end
+
+      session_id ->
+        config = Config.load!()
+        Path.join(Config.session_dir(config), session_id)
+    end
+  end
+
+  defp print_ticket_list(data, tickets) do
+    IO.puts("Session: #{data.session_id}")
+    IO.puts("Task: #{String.slice(data.task_description || "", 0, 60)}")
+    print_separator()
+    IO.puts("")
+
+    IO.puts("  #  Status       Pri   Est  Title")
+    IO.puts("  ─  ──────       ───   ───  ─────")
+
+    Enum.each(tickets, fn ticket ->
+      status_symbol = status_symbol(ticket.status)
+      status_str = ticket.status |> to_string() |> String.pad_trailing(10)
+      priority_str = ticket.priority |> to_string() |> String.slice(0, 3)
+
+      estimate_str =
+        if ticket.estimate, do: String.pad_leading(to_string(ticket.estimate), 3), else: "  -"
+
+      title = String.slice(ticket.title, 0, 40)
+
+      status_color =
+        case ticket.status do
+          :completed -> :green
+          :in_progress -> :yellow
+          :pending -> :light_black
+        end
+
+      Owl.IO.puts([
+        "  ",
+        String.pad_leading(ticket.id, 2),
+        "  ",
+        Owl.Data.tag("#{status_symbol} #{status_str}", status_color),
+        " ",
+        priority_str,
+        "   ",
+        estimate_str,
+        "  ",
+        title
+      ])
+    end)
+
+    IO.puts("")
+    print_separator()
+
+    summary = data.summary
+
+    IO.puts(
+      "Progress: #{summary.completed}/#{summary.total} tickets (#{summary.completed_points}/#{summary.total_points} points)"
+    )
+
+    IO.puts("")
+    IO.puts("Commands:")
+    IO.puts("  albedo tickets show 1     # View ticket details")
+    IO.puts("  albedo tickets start 2    # Start working on ticket")
+    IO.puts("  albedo tickets done 1     # Mark ticket complete")
+  end
+
+  defp print_ticket_detail(ticket) do
+    Owl.IO.puts([
+      "Ticket #",
+      Owl.Data.tag(ticket.id, :cyan),
+      ": ",
+      ticket.title
+    ])
+
+    print_separator()
+    IO.puts("")
+
+    status_color =
+      case ticket.status do
+        :completed -> :green
+        :in_progress -> :yellow
+        :pending -> :light_black
+      end
+
+    Owl.IO.puts([
+      "Status:     ",
+      Owl.Data.tag("#{status_symbol(ticket.status)} #{ticket.status}", status_color)
+    ])
+
+    IO.puts("Type:       #{ticket.type}")
+    IO.puts("Priority:   #{ticket.priority}")
+
+    if ticket.estimate do
+      IO.puts("Estimate:   #{ticket.estimate} points")
+    end
+
+    if ticket.labels != [] do
+      IO.puts("Labels:     #{Enum.join(ticket.labels, ", ")}")
+    end
+
+    IO.puts("")
+
+    if ticket.description do
+      Owl.IO.puts(Owl.Data.tag("Description:", :cyan))
+      IO.puts("  #{ticket.description}")
+      IO.puts("")
+    end
+
+    if ticket.files.create != [] do
+      Owl.IO.puts(Owl.Data.tag("Files to Create:", :cyan))
+      Enum.each(ticket.files.create, &IO.puts("  • #{&1}"))
+      IO.puts("")
+    end
+
+    if ticket.files.modify != [] do
+      Owl.IO.puts(Owl.Data.tag("Files to Modify:", :cyan))
+      Enum.each(ticket.files.modify, &IO.puts("  • #{&1}"))
+      IO.puts("")
+    end
+
+    if ticket.acceptance_criteria != [] do
+      Owl.IO.puts(Owl.Data.tag("Acceptance Criteria:", :cyan))
+
+      Enum.each(ticket.acceptance_criteria, fn criterion ->
+        clean_criterion = String.replace(criterion, ~r/^\s*\[[ x~]\]\s*/, "")
+        IO.puts("  ☐ #{clean_criterion}")
+      end)
+
+      IO.puts("")
+    end
+
+    if ticket.dependencies.blocked_by != [] do
+      IO.puts("Blocked by: ##{Enum.join(ticket.dependencies.blocked_by, ", #")}")
+    end
+
+    if ticket.dependencies.blocks != [] do
+      IO.puts("Blocks: ##{Enum.join(ticket.dependencies.blocks, ", #")}")
+    end
+  end
+
+  defp status_symbol(:pending), do: "○"
+  defp status_symbol(:in_progress), do: "●"
+  defp status_symbol(:completed), do: "✓"
+
   defp mask_api_key(key) when is_binary(key) and byte_size(key) > 12 do
     "#{String.slice(key, 0, 8)}...#{String.slice(key, -4, 4)}"
   end
@@ -687,7 +1103,8 @@ defmodule Albedo.CLI do
     IO.puts("")
     Owl.IO.puts(Owl.Data.tag("Next Steps:", :cyan))
     IO.puts("  1. View the plan:        albedo show #{result.session_id}")
-    IO.puts("  2. Go to session folder: cd $(albedo path #{result.session_id})")
+    IO.puts("  2. Manage tickets:       albedo tickets --session #{result.session_id}")
+    IO.puts("  3. Go to session folder: cd $(albedo path #{result.session_id})")
   end
 
   defp print_invalid_args(invalid) do
@@ -711,6 +1128,7 @@ defmodule Albedo.CLI do
           resume <session_path>   Resume an incomplete session
           sessions                List recent sessions
           show <session_id>       View a session's output
+          tickets [subcommand]    Manage tickets (list, show, start, done, reset)
           path <session_id>       Print session path (use with cd)
           replan <session_path>   Re-run planning phase with different parameters
           config [subcommand]     Manage configuration (show, set-provider, set-key)
@@ -751,6 +1169,21 @@ defmodule Albedo.CLI do
           albedo show auth-feature
           cd $(albedo path auth-feature)
           albedo resume ~/.albedo/sessions/auth-feature/
+
+          # Ticket management
+          albedo tickets                    # List tickets from latest session
+          albedo tickets --session my-session
+          albedo tickets --status pending   # Filter by status
+          albedo tickets show 1             # Show ticket details
+          albedo tickets start 1            # Start working on ticket
+          albedo tickets done 1 2 3         # Mark tickets as completed
+          albedo tickets reset --all        # Reset all tickets
+
+          # Export tickets
+          albedo tickets export                        # JSON to stdout
+          albedo tickets export --format csv -o out.csv
+          albedo tickets export --format markdown      # Markdown checklist
+          albedo tickets export --format github        # GitHub Issues format
 
       """,
       Owl.Data.tag("CONFIGURATION:", :yellow),

@@ -8,6 +8,7 @@ defmodule Albedo.Session.Worker do
 
   alias Albedo.Agents
   alias Albedo.Session.{Registry, State}
+  alias Albedo.Tickets
 
   require Logger
 
@@ -216,9 +217,28 @@ defmodule Albedo.Session.Worker do
       build_summary(state)
       |> maybe_add_greenfield_summary(state)
 
+    save_tickets(state)
+
     state = State.set_summary(state, summary)
     State.save(state)
     state
+  end
+
+  defp save_tickets(state) do
+    tickets = get_in(state.context, [:change_planning, :tickets]) || []
+
+    if tickets != [] do
+      project_name =
+        if state.context[:greenfield] do
+          state.context[:project_name]
+        else
+          nil
+        end
+
+      tickets_data = Tickets.new(state.id, state.task, tickets, project_name: project_name)
+      Tickets.save(state.session_dir, tickets_data)
+      Owl.IO.puts(Owl.Data.tag("  │  └─ ✓ Saved tickets.json", :green))
+    end
   end
 
   defp build_summary(state) do

@@ -7,6 +7,7 @@ defmodule Albedo.Agents.ChangePlanner do
   use Albedo.Agents.Base
 
   alias Albedo.LLM.Prompts
+  alias Albedo.Tickets.Parser
 
   @impl Albedo.Agents.Base
   def investigate(state) do
@@ -18,12 +19,16 @@ defmodule Albedo.Agents.ChangePlanner do
 
     case call_llm(prompt, max_tokens: 16_384) do
       {:ok, response} ->
+        tickets = parse_tickets(response)
+        tickets_count = length(tickets)
+        total_points = tickets |> Enum.map(& &1.estimate) |> Enum.reject(&is_nil/1) |> Enum.sum()
         summary = extract_summary(response)
 
         findings = %{
           content: response,
-          tickets_count: summary.tickets_count,
-          total_points: summary.total_points,
+          tickets: tickets,
+          tickets_count: tickets_count,
+          total_points: total_points,
           files_to_create: summary.files_to_create,
           files_to_modify: summary.files_to_modify,
           risks_identified: summary.risks_identified,
@@ -34,6 +39,13 @@ defmodule Albedo.Agents.ChangePlanner do
 
       {:error, reason} ->
         {:error, reason}
+    end
+  end
+
+  defp parse_tickets(content) do
+    case Parser.parse(content) do
+      {:ok, tickets} -> tickets
+      {:error, _} -> []
     end
   end
 
