@@ -17,11 +17,6 @@ YELLOW='\033[1;33m'
 CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
-# Detect if script is being sourced
-SOURCED=false
-if [[ "${BASH_SOURCE[0]}" != "${0}" ]]; then
-  SOURCED=true
-fi
 
 print_header() {
   echo ""
@@ -637,23 +632,19 @@ print_completion() {
   echo ""
 
   if [[ -n "$SHELL_PROFILE" ]]; then
-    # When sourced, environment changes are applied after this function returns
-    # (handled outside the subshell). When run directly, show reminder.
-    if [[ "$SOURCED" != "true" ]]; then
-      echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-      echo -e "${YELLOW}  IMPORTANT: Activate your shell environment${NC}"
-      echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-      echo ""
-      echo "Your API key and PATH were added to $SHELL_PROFILE"
-      echo "but your current terminal session doesn't have them yet."
-      echo ""
-      echo "Run this command now:"
-      echo ""
-      echo -e "  ${CYAN}source $SHELL_PROFILE${NC}"
-      echo ""
-      echo "Or restart your terminal."
-      echo ""
-    fi
+    echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${YELLOW}  IMPORTANT: Activate your shell environment${NC}"
+    echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo ""
+    echo "Your API key and PATH were added to $SHELL_PROFILE"
+    echo "but your current terminal session doesn't have them yet."
+    echo ""
+    echo "Run this command now:"
+    echo ""
+    echo -e "  ${CYAN}source $SHELL_PROFILE${NC}"
+    echo ""
+    echo "Or restart your terminal."
+    echo ""
   fi
 
   echo ""
@@ -701,31 +692,4 @@ main() {
 }
 
 # Run main
-# When sourced, run in subshell so exit doesn't close the terminal
-# Then source the shell profile in the parent shell to apply changes
-if [[ "$SOURCED" == "true" ]]; then
-  (main)
-  _install_exit_code=$?
-
-  # Apply shell profile changes in the parent shell (outside subshell)
-  if [[ $_install_exit_code -eq 0 ]]; then
-    # Detect shell profile
-    if [[ -n "$ZSH_VERSION" ]]; then
-      _shell_profile="$HOME/.zshrc"
-    elif [[ -n "$BASH_VERSION" ]]; then
-      _shell_profile="$HOME/.bashrc"
-    fi
-
-    if [[ -n "$_shell_profile" && -f "$_shell_profile" ]]; then
-      echo ""
-      echo -e "${CYAN}Applying environment changes...${NC}"
-      # shellcheck source=/dev/null
-      source "$_shell_profile"
-      echo -e "${GREEN}✓ Environment updated! 'albedo' is now available.${NC}"
-    fi
-  fi
-
-  unset _install_exit_code _shell_profile
-else
-  main
-fi
+main
