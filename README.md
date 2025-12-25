@@ -182,6 +182,7 @@ Summary:
 | `albedo tickets start <id>` | Mark a ticket as in-progress |
 | `albedo tickets done <id> [id...]` | Mark ticket(s) as completed |
 | `albedo tickets reset [--all]` | Reset ticket status to pending |
+| `albedo tickets edit <id>` | Edit ticket priority/points |
 | `albedo tickets export [--format]` | Export tickets (json, csv, markdown, github) |
 
 ### Options
@@ -235,6 +236,11 @@ albedo tickets start 1        # Mark as in-progress
 albedo tickets done 1 2 3     # Mark multiple as completed
 albedo tickets reset 1        # Reset to pending
 albedo tickets reset --all    # Reset all tickets
+
+# Edit ticket priority and points
+albedo tickets edit 1 --priority high   # Change priority
+albedo tickets edit 1 --points 5        # Change story points
+albedo tickets edit 1 -p medium --points 3  # Both at once
 
 # Export tickets
 albedo tickets export                          # JSON to stdout

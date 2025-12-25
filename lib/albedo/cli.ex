@@ -1326,6 +1326,7 @@ defmodule Albedo.CLI do
           albedo tickets start 1            # Start working on ticket
           albedo tickets done 1 2 3         # Mark tickets as completed
           albedo tickets reset --all        # Reset all tickets
+          albedo tickets edit 1 --priority high --points 5
 
           # Export tickets
           albedo tickets export                        # JSON to stdout
