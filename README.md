@@ -102,6 +102,10 @@ Use `albedo config set-provider` to change providers.
 
 </details>
 
+## Quick Demo
+
+<!-- TODO: Add screen recording here -->
+
 ## Example: Analyzing a Python CLI Todo App
 
 Let's say you want to build a CLI todo list application in Python. First, create a simple project:
