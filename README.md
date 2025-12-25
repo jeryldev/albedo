@@ -57,7 +57,7 @@ The interactive installer will:
 5. **Configure your API key** - Store securely in shell profile
 6. **Add to PATH** - Make `albedo` available globally
 
-**Tip:** Run `source install.sh` instead of `./install.sh` to auto-apply PATH changes without restarting your terminal.
+**Important:** After installation, run `source ~/.zshrc` (or `~/.bashrc`) to activate your API key and PATH in the current terminal. Alternatively, run `source install.sh` instead of `./install.sh` to auto-apply these changes.
 
 #### Recommended: Using asdf for Version Management
 

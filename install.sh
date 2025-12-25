@@ -644,11 +644,19 @@ print_completion() {
       echo ""
       print_success "Changes applied! You can now use 'albedo' directly."
     else
-      echo "To apply changes, run:"
+      echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+      echo -e "${YELLOW}  IMPORTANT: Activate your shell environment${NC}"
+      echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+      echo ""
+      echo "Your API key and PATH were added to $SHELL_PROFILE"
+      echo "but your current terminal session doesn't have them yet."
+      echo ""
+      echo "Run this command now:"
       echo ""
       echo -e "  ${CYAN}source $SHELL_PROFILE${NC}"
       echo ""
       echo "Or restart your terminal."
+      echo ""
     fi
   fi
 
