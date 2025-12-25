@@ -637,13 +637,9 @@ print_completion() {
   echo ""
 
   if [[ -n "$SHELL_PROFILE" ]]; then
-    if [[ "$SOURCED" == "true" ]]; then
-      echo -e "${CYAN}Applying changes...${NC}"
-      # shellcheck source=/dev/null
-      source "$SHELL_PROFILE"
-      echo ""
-      print_success "Changes applied! You can now use 'albedo' directly."
-    else
+    # When sourced, environment changes are applied after this function returns
+    # (handled outside the subshell). When run directly, show reminder.
+    if [[ "$SOURCED" != "true" ]]; then
       echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
       echo -e "${YELLOW}  IMPORTANT: Activate your shell environment${NC}"
       echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
@@ -705,4 +701,31 @@ main() {
 }
 
 # Run main
-main
+# When sourced, run in subshell so exit doesn't close the terminal
+# Then source the shell profile in the parent shell to apply changes
+if [[ "$SOURCED" == "true" ]]; then
+  (main)
+  _install_exit_code=$?
+
+  # Apply shell profile changes in the parent shell (outside subshell)
+  if [[ $_install_exit_code -eq 0 ]]; then
+    # Detect shell profile
+    if [[ -n "$ZSH_VERSION" ]]; then
+      _shell_profile="$HOME/.zshrc"
+    elif [[ -n "$BASH_VERSION" ]]; then
+      _shell_profile="$HOME/.bashrc"
+    fi
+
+    if [[ -n "$_shell_profile" && -f "$_shell_profile" ]]; then
+      echo ""
+      echo -e "${CYAN}Applying environment changes...${NC}"
+      # shellcheck source=/dev/null
+      source "$_shell_profile"
+      echo -e "${GREEN}✓ Environment updated! 'albedo' is now available.${NC}"
+    fi
+  fi
+
+  unset _install_exit_code _shell_profile
+else
+  main
+fi
