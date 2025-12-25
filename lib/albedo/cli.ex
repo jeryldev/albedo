@@ -848,13 +848,13 @@ defmodule Albedo.CLI do
     print_separator()
     IO.puts("")
 
-    IO.puts("  #  Status       Pri   Est  Title")
-    IO.puts("  ─  ──────       ───   ───  ─────")
+    IO.puts("  #  Status       Priority  Pts  Title")
+    IO.puts("  ─  ──────       ────────  ───  ─────")
 
     Enum.each(tickets, fn ticket ->
       status_symbol = status_symbol(ticket.status)
       status_str = ticket.status |> to_string() |> String.pad_trailing(10)
-      priority_str = ticket.priority |> to_string() |> String.slice(0, 3)
+      priority_str = ticket.priority |> to_string() |> String.pad_trailing(8)
 
       estimate_str =
         if ticket.estimate, do: String.pad_leading(to_string(ticket.estimate), 3), else: "  -"
@@ -875,7 +875,7 @@ defmodule Albedo.CLI do
         Owl.Data.tag("#{status_symbol} #{status_str}", status_color),
         " ",
         priority_str,
-        "   ",
+        " ",
         estimate_str,
         "  ",
         title
