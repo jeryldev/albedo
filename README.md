@@ -6,6 +6,8 @@
 [![Elixir](https://img.shields.io/badge/Elixir-1.15+-purple.svg)](https://elixir-lang.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
+[![Albedo Demo](https://img.youtube.com/vi/ncMwETGwq4s/maxresdefault.jpg)](https://www.youtube.com/watch?v=ncMwETGwq4s)
+
 ## What is Albedo?
 
 In alchemy, **albedo** (Latin for "whiteness") is the second stage of the *magnum opus* - the purification phase where **clarity emerges from chaos**. After the initial *nigredo* (decomposition), albedo represents the moment of illumination and understanding.
@@ -101,10 +103,6 @@ Provider is configured in `~/.albedo/config.toml` (created on first run).
 Use `albedo config set-provider` to change providers.
 
 </details>
-
-## Quick Demo
-
-<!-- TODO: Add screen recording here -->
 
 ## Example: Analyzing a Python CLI Todo App
 
