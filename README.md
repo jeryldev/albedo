@@ -36,26 +36,43 @@ Albedo helps you plan projects from scratch:
 
 ### Prerequisites
 
-- Elixir 1.15+ and Erlang/OTP 26+
-- [ripgrep](https://github.com/BurntSushi/ripgrep) (`brew install ripgrep` or `apt install ripgrep`)
-- An API key from one of: Google AI (Gemini), Anthropic (Claude), or OpenAI
+- **Elixir 1.15+** and **Erlang/OTP 26+**
+- **[ripgrep](https://github.com/BurntSushi/ripgrep)** - Fast code search tool
+- An **API key** from one of: Google AI (Gemini), Anthropic (Claude), or OpenAI
 
 ### Installation
 
 ```bash
-# Clone and install in one step
+# Clone and install
 git clone https://github.com/jeryldev/albedo.git
 cd albedo
 ./install.sh
 ```
 
-The installer will:
-- Check for prerequisites (Elixir, ripgrep)
-- Build the CLI
-- Set up your API key and provider
-- Add `albedo` to your PATH
+The interactive installer will:
+1. **Check prerequisites** - Detect Elixir and ripgrep
+2. **Offer to install missing tools** - Uses asdf (recommended) or Homebrew/apt
+3. **Build the CLI** - Compile and create the `albedo` binary
+4. **Set up your provider** - Choose Gemini, Claude, or OpenAI
+5. **Configure your API key** - Store securely in shell profile
+6. **Add to PATH** - Make `albedo` available globally
 
-**Tip:** Run `source install.sh` instead of `./install.sh` to auto-apply changes without restarting your terminal.
+**Tip:** Run `source install.sh` instead of `./install.sh` to auto-apply PATH changes without restarting your terminal.
+
+#### Recommended: Using asdf for Version Management
+
+For Elixir developers, we recommend [asdf](https://asdf-vm.com/) for managing Elixir/Erlang versions. The installer will automatically detect and use asdf if available.
+
+```bash
+# If you don't have asdf, install it first:
+# https://asdf-vm.com/guide/getting-started.html
+
+# Then add Erlang and Elixir plugins
+asdf plugin add erlang
+asdf plugin add elixir
+asdf install erlang latest && asdf global erlang latest
+asdf install elixir latest && asdf global elixir latest
+```
 
 ### Supported Providers
 
@@ -151,7 +168,7 @@ Summary:
 
 | Command | Description |
 |---------|-------------|
-| `albedo init` | Initialize configuration (first-time setup) |
+| `albedo init` | Initialize configuration and check prerequisites |
 | `albedo analyze <path> --task "..."` | Analyze a codebase with a feature request |
 | `albedo plan --name <name> --task "..."` | Plan a new project from scratch (greenfield) |
 | `albedo resume <session_path>` | Resume an incomplete analysis session |
@@ -160,6 +177,12 @@ Summary:
 | `albedo replan <session_path>` | Re-run the planning phase |
 | `albedo path <session_id>` | Print session path (for use with cd) |
 | `albedo config [subcommand]` | Manage configuration (show, set-provider, set-key) |
+| `albedo tickets` | List tickets from the latest session |
+| `albedo tickets show <id>` | Show detailed ticket information |
+| `albedo tickets start <id>` | Mark a ticket as in-progress |
+| `albedo tickets done <id> [id...]` | Mark ticket(s) as completed |
+| `albedo tickets reset [--all]` | Reset ticket status to pending |
+| `albedo tickets export [--format]` | Export tickets (json, csv, markdown, github) |
 
 ### Options
 
@@ -186,6 +209,38 @@ albedo config set-provider
 
 # Set API key for current provider
 albedo config set-key
+```
+
+### Ticket Management
+
+After analysis, manage your implementation tickets:
+
+```bash
+# List all tickets from the latest session
+albedo tickets
+
+# List tickets from a specific session
+albedo tickets --session my-feature
+
+# Filter by status
+albedo tickets --status pending
+albedo tickets --status in_progress
+albedo tickets --status completed
+
+# View ticket details
+albedo tickets show 1
+
+# Update ticket status
+albedo tickets start 1        # Mark as in-progress
+albedo tickets done 1 2 3     # Mark multiple as completed
+albedo tickets reset 1        # Reset to pending
+albedo tickets reset --all    # Reset all tickets
+
+# Export tickets
+albedo tickets export                          # JSON to stdout
+albedo tickets export --format csv -o out.csv  # CSV to file
+albedo tickets export --format markdown        # Markdown checklist
+albedo tickets export --format github          # GitHub Issues format
 ```
 
 ## Greenfield Planning: Building from Scratch

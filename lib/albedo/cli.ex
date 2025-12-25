@@ -155,6 +155,26 @@ defmodule Albedo.CLI do
   defp cmd_init do
     print_header()
 
+    IO.puts("Checking prerequisites...")
+    IO.puts("")
+
+    elixir_version = System.version()
+    otp_version = :erlang.system_info(:otp_release) |> List.to_string()
+    install_method = check_elixir_install_method()
+
+    install_method_label =
+      case install_method do
+        :asdf -> "asdf"
+        :homebrew -> "Homebrew"
+        :system -> "system"
+      end
+
+    print_success("Elixir #{elixir_version} (OTP #{otp_version}) via #{install_method_label}")
+
+    ripgrep_status = check_ripgrep()
+
+    IO.puts("")
+
     case Config.init() do
       {:ok, config_file} ->
         print_success("Config directory ready!")
@@ -185,6 +205,12 @@ defmodule Albedo.CLI do
         IO.puts("")
         print_info("To change provider: albedo config set-provider")
         print_info("To view config:     albedo config")
+
+        if ripgrep_status == :missing do
+          IO.puts("")
+          print_warning("Albedo requires ripgrep for codebase analysis.")
+          print_info("Please install ripgrep before using 'albedo analyze'.")
+        end
 
       {:error, reason} ->
         print_error("Failed to initialize: #{inspect(reason)}")
@@ -1025,6 +1051,58 @@ defmodule Albedo.CLI do
 
   defp print_error(message) do
     Owl.IO.puts(Owl.Data.tag("✗ #{message}", :red))
+  end
+
+  defp print_warning(message) do
+    Owl.IO.puts(Owl.Data.tag("⚠ #{message}", :yellow))
+  end
+
+  defp check_ripgrep do
+    case System.find_executable("rg") do
+      nil ->
+        print_warning("ripgrep (rg) not found")
+        IO.puts("")
+        print_info("ripgrep is required for codebase analysis.")
+        IO.puts("")
+        IO.puts("Install it:")
+
+        case :os.type() do
+          {:unix, :darwin} ->
+            IO.puts("  brew install ripgrep")
+
+          {:unix, _} ->
+            IO.puts("  # Ubuntu/Debian:")
+            IO.puts("  sudo apt-get install ripgrep")
+            IO.puts("")
+            IO.puts("  # Fedora:")
+            IO.puts("  sudo dnf install ripgrep")
+
+          _ ->
+            IO.puts("  See: https://github.com/BurntSushi/ripgrep#installation")
+        end
+
+        IO.puts("")
+        :missing
+
+      _path ->
+        {version, 0} = System.cmd("rg", ["--version"])
+        version_line = version |> String.split("\n") |> List.first()
+        print_success("ripgrep found: #{version_line}")
+        :ok
+    end
+  end
+
+  defp check_elixir_install_method do
+    cond do
+      System.find_executable("asdf") != nil ->
+        :asdf
+
+      System.find_executable("brew") != nil ->
+        :homebrew
+
+      true ->
+        :system
+    end
   end
 
   defp print_session(id, state, task) do

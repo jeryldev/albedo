@@ -70,54 +70,367 @@ check_command() {
   command -v "$1" &> /dev/null
 }
 
+detect_package_manager() {
+  local os="$1"
+
+  # Prefer asdf for Elixir developers (better version management)
+  if check_command asdf; then
+    echo "asdf"
+    return
+  fi
+
+  case $os in
+    macos)
+      if check_command brew; then
+        echo "brew"
+      else
+        echo "none"
+      fi
+      ;;
+    linux)
+      if check_command apt-get; then
+        echo "apt"
+      elif check_command dnf; then
+        echo "dnf"
+      elif check_command pacman; then
+        echo "pacman"
+      elif check_command zypper; then
+        echo "zypper"
+      else
+        echo "none"
+      fi
+      ;;
+    *)
+      echo "none"
+      ;;
+  esac
+}
+
+install_homebrew() {
+  print_info "Installing Homebrew..."
+  /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+  # Add Homebrew to PATH for this session
+  if [[ -f "/opt/homebrew/bin/brew" ]]; then
+    eval "$(/opt/homebrew/bin/brew shellenv)"
+  elif [[ -f "/usr/local/bin/brew" ]]; then
+    eval "$(/usr/local/bin/brew shellenv)"
+  fi
+
+  if check_command brew; then
+    print_success "Homebrew installed"
+    return 0
+  else
+    print_error "Failed to install Homebrew"
+    return 1
+  fi
+}
+
+install_with_asdf() {
+  local tool="$1"
+
+  case $tool in
+    elixir)
+      print_info "Installing Erlang and Elixir via asdf..."
+
+      # Add plugins if not already added
+      if ! asdf plugin list 2>/dev/null | grep -q "^erlang$"; then
+        print_info "Adding erlang plugin..."
+        asdf plugin add erlang
+      fi
+
+      if ! asdf plugin list 2>/dev/null | grep -q "^elixir$"; then
+        print_info "Adding elixir plugin..."
+        asdf plugin add elixir
+      fi
+
+      # Install latest versions
+      print_info "Installing Erlang (this may take a few minutes)..."
+      asdf install erlang latest
+      asdf global erlang latest
+
+      print_info "Installing Elixir..."
+      asdf install elixir latest
+      asdf global elixir latest
+
+      # Reshim to ensure binaries are available
+      asdf reshim erlang
+      asdf reshim elixir
+      ;;
+
+    ripgrep)
+      # asdf doesn't have ripgrep, fall back to system package manager
+      local os
+      os=$(detect_os)
+      case $os in
+        macos)
+          if check_command brew; then
+            brew install ripgrep
+          else
+            print_error "Please install ripgrep manually: https://github.com/BurntSushi/ripgrep#installation"
+            return 1
+          fi
+          ;;
+        linux)
+          if check_command apt-get; then
+            sudo apt-get update -qq && sudo apt-get install -y ripgrep
+          elif check_command dnf; then
+            sudo dnf install -y ripgrep
+          elif check_command pacman; then
+            sudo pacman -S --noconfirm ripgrep
+          else
+            print_error "Please install ripgrep manually: https://github.com/BurntSushi/ripgrep#installation"
+            return 1
+          fi
+          ;;
+        *)
+          print_error "Please install ripgrep manually: https://github.com/BurntSushi/ripgrep#installation"
+          return 1
+          ;;
+      esac
+      ;;
+  esac
+}
+
+install_prerequisites() {
+  local os="$1"
+  local pkg_manager="$2"
+  shift 2
+  local missing=("$@")
+
+  if [[ ${#missing[@]} -eq 0 ]]; then
+    return 0
+  fi
+
+  # Handle asdf separately (installs one tool at a time)
+  if [[ "$pkg_manager" == "asdf" ]]; then
+    for tool in "${missing[@]}"; do
+      if ! install_with_asdf "$tool"; then
+        return 1
+      fi
+    done
+    print_success "Prerequisites installed"
+    return 0
+  fi
+
+  # Build package list based on what's missing
+  local packages=()
+  for tool in "${missing[@]}"; do
+    case $tool in
+      elixir) packages+=("elixir") ;;
+      ripgrep) packages+=("ripgrep") ;;
+    esac
+  done
+
+  if [[ ${#packages[@]} -eq 0 ]]; then
+    return 0
+  fi
+
+  print_info "Installing: ${packages[*]}..."
+
+  case $pkg_manager in
+    brew)
+      brew install "${packages[@]}"
+      ;;
+    apt)
+      sudo apt-get update -qq
+      sudo apt-get install -y "${packages[@]}"
+      ;;
+    dnf)
+      sudo dnf install -y "${packages[@]}"
+      ;;
+    pacman)
+      sudo pacman -S --noconfirm "${packages[@]}"
+      ;;
+    zypper)
+      sudo zypper install -y "${packages[@]}"
+      ;;
+    *)
+      print_error "No supported package manager found"
+      return 1
+      ;;
+  esac
+
+  if [[ $? -eq 0 ]]; then
+    print_success "Prerequisites installed"
+    return 0
+  else
+    print_error "Installation failed"
+    return 1
+  fi
+}
+
+get_install_instructions() {
+  local os="$1"
+  local pkg_manager="$2"
+
+  case $pkg_manager in
+    asdf)
+      echo "  # For Elixir (via asdf - recommended for developers):"
+      echo "  asdf plugin add erlang && asdf plugin add elixir"
+      echo "  asdf install erlang latest && asdf global erlang latest"
+      echo "  asdf install elixir latest && asdf global elixir latest"
+      echo ""
+      echo "  # For ripgrep:"
+      if [[ "$os" == "macos" ]]; then
+        echo "  brew install ripgrep"
+      else
+        echo "  sudo apt-get install ripgrep  # or dnf/pacman"
+      fi
+      ;;
+    brew)
+      echo "  brew install elixir ripgrep"
+      ;;
+    apt)
+      echo "  sudo apt-get install elixir ripgrep"
+      ;;
+    dnf)
+      echo "  sudo dnf install elixir ripgrep"
+      ;;
+    pacman)
+      echo "  sudo pacman -S elixir ripgrep"
+      ;;
+    zypper)
+      echo "  sudo zypper install elixir ripgrep"
+      ;;
+    *)
+      echo "  # Recommended: Use asdf for version management"
+      echo "  # Install asdf: https://asdf-vm.com/guide/getting-started.html"
+      echo ""
+      echo "  # Or use your package manager:"
+      echo "  See: https://elixir-lang.org/install.html"
+      echo "  See: https://github.com/BurntSushi/ripgrep#installation"
+      ;;
+  esac
+}
+
 check_prerequisites() {
   print_info "Checking prerequisites..."
 
   local missing=()
+  local missing_display=()
 
   if ! check_command elixir; then
     missing+=("elixir")
+    missing_display+=("Elixir")
   else
-    print_success "Elixir found: $(elixir --version | head -1)"
+    local elixir_version
+    elixir_version=$(elixir -e 'IO.puts("Elixir #{System.version()}")' 2>/dev/null)
+    print_success "Elixir found: ${elixir_version:-$(elixir --short-version 2>/dev/null || echo "installed")}"
   fi
 
   if ! check_command mix; then
-    missing+=("mix")
+    if [[ ! " ${missing[*]} " =~ " elixir " ]]; then
+      missing+=("elixir")
+      missing_display+=("Mix (part of Elixir)")
+    fi
   fi
 
   if ! check_command rg; then
-    missing+=("ripgrep (rg)")
+    missing+=("ripgrep")
+    missing_display+=("ripgrep")
   else
     print_success "ripgrep found: $(rg --version | head -1)"
   fi
 
-  if [[ ${#missing[@]} -gt 0 ]]; then
+  if [[ ${#missing[@]} -eq 0 ]]; then
     echo ""
-    print_error "Missing required tools: ${missing[*]}"
-    echo ""
-    echo "Please install them first:"
-
-    OS=$(detect_os)
-    case $OS in
-      macos)
-        echo "  brew install elixir ripgrep"
-        ;;
-      linux)
-        echo "  # For Ubuntu/Debian:"
-        echo "  sudo apt install elixir ripgrep"
-        echo ""
-        echo "  # For Fedora:"
-        echo "  sudo dnf install elixir ripgrep"
-        ;;
-      *)
-        echo "  See: https://elixir-lang.org/install.html"
-        echo "  See: https://github.com/BurntSushi/ripgrep#installation"
-        ;;
-    esac
-    exit 1
+    return 0
   fi
 
   echo ""
+  print_error "Missing required tools:"
+  for tool in "${missing_display[@]}"; do
+    echo -e "  ${RED}✗${NC} $tool"
+  done
+  echo ""
+
+  local os
+  os=$(detect_os)
+  local pkg_manager
+  pkg_manager=$(detect_package_manager "$os")
+
+  # Handle missing Homebrew on macOS
+  if [[ "$os" == "macos" && "$pkg_manager" == "none" ]]; then
+    echo "Homebrew is required to install prerequisites on macOS."
+    echo ""
+    if prompt_yes_no "Would you like to install Homebrew first?" "y"; then
+      if ! install_homebrew; then
+        echo ""
+        echo "Please install Homebrew manually from: https://brew.sh"
+        echo "Then run this installer again."
+        exit 1
+      fi
+      pkg_manager="brew"
+      echo ""
+    else
+      echo ""
+      echo "Please install Homebrew from: https://brew.sh"
+      echo "Then run this installer again."
+      exit 1
+    fi
+  fi
+
+  # Offer to install prerequisites
+  if [[ "$pkg_manager" != "none" ]]; then
+    if prompt_yes_no "Would you like to install missing prerequisites automatically?" "y"; then
+      echo ""
+      if install_prerequisites "$os" "$pkg_manager" "${missing[@]}"; then
+        echo ""
+        # Verify installation
+        local still_missing=()
+        for tool in "${missing[@]}"; do
+          case $tool in
+            elixir)
+              if ! check_command elixir; then
+                still_missing+=("elixir")
+              else
+                local ver
+                ver=$(elixir -e 'IO.puts("Elixir #{System.version()}")' 2>/dev/null || echo "installed")
+                print_success "Elixir installed: $ver"
+              fi
+              ;;
+            ripgrep)
+              if ! check_command rg; then
+                still_missing+=("ripgrep")
+              else
+                print_success "ripgrep installed: $(rg --version | head -1)"
+              fi
+              ;;
+          esac
+        done
+
+        if [[ ${#still_missing[@]} -gt 0 ]]; then
+          print_error "Some tools failed to install: ${still_missing[*]}"
+          echo ""
+          echo "Please install them manually:"
+          get_install_instructions "$os" "$pkg_manager"
+          exit 1
+        fi
+
+        echo ""
+        return 0
+      else
+        echo ""
+        echo "Please install them manually:"
+        get_install_instructions "$os" "$pkg_manager"
+        exit 1
+      fi
+    else
+      echo ""
+      print_info "Installation cancelled."
+      echo ""
+      echo "To install manually, run:"
+      get_install_instructions "$os" "$pkg_manager"
+      exit 0
+    fi
+  else
+    echo "No supported package manager found."
+    echo ""
+    echo "Please install the missing tools manually:"
+    get_install_instructions "$os" "$pkg_manager"
+    exit 1
+  fi
 }
 
 build_albedo() {
