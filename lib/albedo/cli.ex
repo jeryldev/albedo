@@ -36,7 +36,8 @@ defmodule Albedo.CLI do
           scope: :string,
           stack: :string,
           database: :string,
-          name: :string
+          name: :string,
+          session: :string
         ],
         aliases: [
           h: :help,
@@ -44,7 +45,8 @@ defmodule Albedo.CLI do
           t: :task,
           i: :interactive,
           s: :scope,
-          n: :name
+          n: :name,
+          S: :session
         ]
       )
 
@@ -69,6 +71,10 @@ defmodule Albedo.CLI do
   end
 
   defp run_command([], _opts) do
+    print_help()
+  end
+
+  defp run_command(["help" | _], _opts) do
     print_help()
   end
 
@@ -98,6 +104,21 @@ defmodule Albedo.CLI do
 
   defp run_command(["plan" | _], opts) do
     cmd_plan(opts)
+  end
+
+  defp run_command(["config" | subcommand], _opts) do
+    cmd_config(subcommand)
+  end
+
+  defp run_command(["path", session_id | _], _opts) do
+    cmd_path(session_id)
+  end
+
+  defp run_command(["path"], _opts) do
+    print_error("Missing session ID")
+    print_info("Usage: albedo path <session_id>")
+    print_info("Then:  cd $(albedo path <session_id>)")
+    halt_with_error(1)
   end
 
   defp run_command([unknown | _], _opts) do
@@ -346,6 +367,200 @@ defmodule Albedo.CLI do
     end
   end
 
+  defp cmd_config([]) do
+    cmd_config(["show"])
+  end
+
+  defp cmd_config(["show" | _]) do
+    print_header()
+    config = Config.load!()
+
+    provider = Config.provider(config)
+    api_key = Config.api_key(config)
+    model = Config.model(config)
+
+    Owl.IO.puts(Owl.Data.tag("Current Configuration:", :cyan))
+    IO.puts("")
+
+    IO.puts("  Provider:   #{provider}")
+    IO.puts("  Model:      #{model}")
+
+    if api_key do
+      masked = mask_api_key(api_key)
+      Owl.IO.puts(["  API Key:    ", Owl.Data.tag(masked, :green)])
+    else
+      Owl.IO.puts(["  API Key:    ", Owl.Data.tag("NOT SET", :red)])
+    end
+
+    IO.puts("")
+    IO.puts("  Config:     #{Config.config_file()}")
+    IO.puts("  Sessions:   #{Config.sessions_dir()}")
+  end
+
+  defp cmd_config(["set-provider" | _]) do
+    print_header()
+
+    IO.puts("Select LLM provider:")
+    IO.puts("")
+    IO.puts("  1. Gemini (recommended - free tier available)")
+    IO.puts("  2. Claude")
+    IO.puts("  3. OpenAI")
+    IO.puts("")
+
+    choice = IO.gets("Enter choice [1]: ") |> String.trim()
+
+    {provider, env_var, model} =
+      case choice do
+        "2" -> {"claude", "ANTHROPIC_API_KEY", "claude-sonnet-4-20250514"}
+        "3" -> {"openai", "OPENAI_API_KEY", "gpt-4o"}
+        _ -> {"gemini", "GEMINI_API_KEY", "gemini-2.0-flash"}
+      end
+
+    shell_profile = detect_shell_profile()
+    export_line = "export ALBEDO_PROVIDER=\"#{provider}\""
+
+    IO.puts("")
+    IO.puts("This will add to #{shell_profile}:")
+    Owl.IO.puts(Owl.Data.tag("  #{export_line}", :cyan))
+    IO.puts("")
+
+    confirm = IO.gets("Proceed? [Y/n]: ") |> String.trim() |> String.downcase()
+
+    if confirm in ["", "y", "yes"] do
+      case append_to_shell_profile(shell_profile, "ALBEDO_PROVIDER", export_line) do
+        {:ok, :replaced} ->
+          print_success("Replaced ALBEDO_PROVIDER in #{shell_profile}")
+          IO.puts("")
+          print_info("Run: source #{shell_profile}")
+          print_info("Make sure you have #{env_var} set for the #{provider} provider.")
+          print_info("Expected model: #{model}")
+
+        {:ok, :added} ->
+          print_success("Added ALBEDO_PROVIDER to #{shell_profile}")
+          IO.puts("")
+          print_info("Run: source #{shell_profile}")
+          print_info("Make sure you have #{env_var} set for the #{provider} provider.")
+          print_info("Expected model: #{model}")
+      end
+    else
+      print_info("Cancelled.")
+    end
+  end
+
+  defp cmd_config(["set-key" | _]) do
+    print_header()
+
+    IO.puts("Set API key for which provider?")
+    IO.puts("")
+    IO.puts("  1. Gemini")
+    IO.puts("  2. Claude")
+    IO.puts("  3. OpenAI")
+    IO.puts("")
+
+    choice = IO.gets("Enter choice [1]: ") |> String.trim()
+
+    {provider, env_var} =
+      case choice do
+        "2" -> {"Claude", "ANTHROPIC_API_KEY"}
+        "3" -> {"OpenAI", "OPENAI_API_KEY"}
+        _ -> {"Gemini", "GEMINI_API_KEY"}
+      end
+
+    IO.puts("")
+    api_key = IO.gets("Enter your #{provider} API key: ") |> String.trim()
+
+    if api_key == "" do
+      print_info("Cancelled.")
+    else
+      shell_profile = detect_shell_profile()
+      masked = mask_api_key(api_key)
+      export_line = "export #{env_var}=\"#{api_key}\""
+
+      IO.puts("")
+      IO.puts("This will update #{shell_profile}:")
+      Owl.IO.puts(Owl.Data.tag("  export #{env_var}=\"#{masked}\"", :cyan))
+      IO.puts("")
+
+      confirm = IO.gets("Proceed? [Y/n]: ") |> String.trim() |> String.downcase()
+
+      if confirm in ["", "y", "yes"] do
+        case append_to_shell_profile(shell_profile, env_var, export_line) do
+          {:ok, :replaced} ->
+            print_success("Replaced #{env_var} in #{shell_profile}")
+            IO.puts("")
+            print_info("Run: source #{shell_profile}")
+
+          {:ok, :added} ->
+            print_success("Added #{env_var} to #{shell_profile}")
+            IO.puts("")
+            print_info("Run: source #{shell_profile}")
+        end
+      else
+        print_info("Cancelled.")
+      end
+    end
+  end
+
+  defp cmd_config([unknown | _]) do
+    print_error("Unknown config subcommand: #{unknown}")
+    IO.puts("")
+    IO.puts("Available subcommands:")
+    IO.puts("  albedo config show         Show current configuration")
+    IO.puts("  albedo config set-provider Select LLM provider")
+    IO.puts("  albedo config set-key      Set API key for current provider")
+    halt_with_error(1)
+  end
+
+  defp cmd_path(session_id) do
+    config = Config.load!()
+    session_path = Path.join(Config.session_dir(config), session_id)
+
+    if File.dir?(session_path) do
+      IO.puts(session_path)
+    else
+      IO.puts(:stderr, "Session not found: #{session_id}")
+      halt_with_error(1)
+    end
+  end
+
+  defp mask_api_key(key) when is_binary(key) and byte_size(key) > 12 do
+    "#{String.slice(key, 0, 8)}...#{String.slice(key, -4, 4)}"
+  end
+
+  defp mask_api_key(key) when is_binary(key), do: "****"
+  defp mask_api_key(_), do: "NOT SET"
+
+  defp detect_shell_profile do
+    shell = System.get_env("SHELL") || ""
+
+    cond do
+      String.contains?(shell, "zsh") -> "~/.zshrc"
+      String.contains?(shell, "bash") -> "~/.bashrc"
+      true -> "~/.profile"
+    end
+  end
+
+  defp append_to_shell_profile(shell_profile, env_var, export_line) do
+    path = Path.expand(shell_profile)
+
+    if File.exists?(path) do
+      content = File.read!(path)
+      pattern = ~r/^export #{Regex.escape(env_var)}=.*$/m
+
+      if Regex.match?(pattern, content) do
+        updated = Regex.replace(pattern, content, export_line)
+        File.write!(path, updated)
+        {:ok, :replaced}
+      else
+        File.write!(path, content <> "\n# Added by Albedo\n#{export_line}\n")
+        {:ok, :added}
+      end
+    else
+      File.write!(path, "# Added by Albedo\n#{export_line}\n")
+      {:ok, :added}
+    end
+  end
+
   defp format_error(:rate_limited) do
     "API rate limit exceeded. Wait a minute and try again, or configure a fallback provider."
   end
@@ -489,7 +704,9 @@ defmodule Albedo.CLI do
           resume <session_path>   Resume an incomplete session
           sessions                List recent sessions
           show <session_id>       View a session's output
+          path <session_id>       Print session path (use with cd)
           replan <session_path>   Re-run planning phase with different parameters
+          config [subcommand]     Manage configuration (show, set-provider, set-key)
 
       """,
       Owl.Data.tag("OPTIONS:", :yellow),
@@ -497,6 +714,7 @@ defmodule Albedo.CLI do
 
           -t, --task <desc>       Task description (required for analyze/plan)
           -n, --name <name>       Project name (required for plan)
+          -S, --session <name>    Custom session name (optional)
           --stack <stack>         Tech stack: phoenix, rails, nextjs, fastapi, etc.
           --database <db>         Database: postgres, mysql, sqlite, mongodb
           -i, --interactive       Enable interactive clarifying questions
@@ -510,16 +728,22 @@ defmodule Albedo.CLI do
 
           # Analyze existing codebase
           albedo analyze ~/projects/myapp --task "Add user authentication"
-          albedo analyze . -t "Convert status to configurable dropdown" -i
+          albedo analyze . -t "Add auth" --session auth-feature
 
           # Plan new project from scratch
           albedo plan --name my_todo --task "Build a todo app with user accounts"
-          albedo plan -n shop_api -t "E-commerce API" --stack phoenix --database postgres
+          albedo plan -n shop_api -t "E-commerce API" --stack phoenix -S shop-v1
+
+          # Configuration management
+          albedo config                    # Show current config
+          albedo config set-provider       # Change LLM provider
+          albedo config set-key            # Set API key
 
           # Session management
           albedo sessions
-          albedo show 2025-01-15_user-auth
-          albedo resume ~/.albedo/sessions/2025-01-15_user-auth/
+          albedo show auth-feature
+          cd $(albedo path auth-feature)
+          albedo resume ~/.albedo/sessions/auth-feature/
 
       """,
       Owl.Data.tag("CONFIGURATION:", :yellow),

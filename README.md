@@ -156,6 +156,8 @@ Summary:
 | `albedo sessions` | List recent analysis sessions |
 | `albedo show <session_id>` | Display a session's FEATURE.md output |
 | `albedo replan <session_path>` | Re-run the planning phase |
+| `albedo path <session_id>` | Print session path (for use with cd) |
+| `albedo config [subcommand]` | Manage configuration (show, set-provider, set-key) |
 
 ### Options
 
@@ -163,12 +165,26 @@ Summary:
 |--------|-------|-------------|
 | `--task <desc>` | `-t` | Task/feature description (required for analyze/plan) |
 | `--name <name>` | `-n` | Project name (required for plan command) |
+| `--session <name>` | `-S` | Custom session name (optional, for easier reference) |
 | `--stack <stack>` | | Tech stack hint: `phoenix`, `rails`, `nextjs`, `fastapi`, etc. |
 | `--database <db>` | | Database hint: `postgres`, `mysql`, `sqlite`, `mongodb` |
 | `--interactive` | `-i` | Enable interactive clarifying questions |
 | `--scope <scope>` | `-s` | Planning scope: `full` (default), `minimal` |
 | `--help` | `-h` | Show help message |
 | `--version` | `-v` | Show version |
+
+### Configuration Management
+
+```bash
+# Show current configuration (provider, API key status, paths)
+albedo config
+
+# Change LLM provider (gemini, claude, openai)
+albedo config set-provider
+
+# Set API key for current provider
+albedo config set-key
+```
 
 ## Greenfield Planning: Building from Scratch
 
@@ -184,7 +200,8 @@ All sessions (both `analyze` and `plan`) are stored in `~/.albedo/sessions/`:
 ~/.albedo/
 ├── config.toml                     # Your configuration
 └── sessions/
-    └── 2025-01-15_my-todo-app/     # Session folder (date + task slug)
+    ├── auth-feature/               # Custom session name (--session auth-feature)
+    └── 2025-01-15_my-todo-app_0042/  # Auto-generated (date + task slug + id)
         ├── session.json            # Session state and metadata
         ├── 00_domain_research.md   # Domain analysis
         ├── 01_tech_stack.md        # Tech stack recommendations
@@ -193,6 +210,13 @@ All sessions (both `analyze` and `plan`) are stored in `~/.albedo/sessions/`:
         ├── 04_feature_location.md  # Relevant code locations (existing codebases only)
         ├── 05_impact_analysis.md   # Dependency tracing (existing codebases only)
         └── FEATURE.md              # Final tickets and implementation plan
+```
+
+**Tip:** Use `--session` or `-S` to give your session a memorable name:
+```bash
+albedo analyze ~/myapp --task "Add auth" --session auth-feature
+albedo show auth-feature       # View the output
+cd $(albedo path auth-feature) # Jump to session folder
 ```
 
 For greenfield projects, phases 03-05 are skipped since there's no codebase to analyze. The tool generates domain research, tech stack recommendations, architecture design, and implementation tickets.

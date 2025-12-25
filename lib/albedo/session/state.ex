@@ -100,7 +100,7 @@ defmodule Albedo.Session.State do
   """
   def new(codebase_path, task, opts \\ []) do
     now = DateTime.utc_now()
-    id = generate_id(task)
+    id = generate_id(task, opts[:session])
     config = Albedo.Config.load!()
     session_dir = Path.join(Albedo.Config.session_dir(config), id)
 
@@ -126,7 +126,7 @@ defmodule Albedo.Session.State do
   """
   def new_greenfield(project_name, task, opts \\ []) do
     now = DateTime.utc_now()
-    id = generate_id(task)
+    id = generate_id(task, opts[:session])
     config = Albedo.Config.load!()
     session_dir = Path.join(Albedo.Config.session_dir(config), id)
 
@@ -324,7 +324,13 @@ defmodule Albedo.Session.State do
   def failed?(%__MODULE__{state: :failed}), do: true
   def failed?(%__MODULE__{}), do: false
 
-  defp generate_id(task) do
+  defp generate_id(_task, custom_name) when is_binary(custom_name) and custom_name != "" do
+    custom_name
+    |> String.downcase()
+    |> slugify()
+  end
+
+  defp generate_id(task, _custom_name) do
     date = Date.utc_today() |> Date.to_iso8601()
     slug = task |> String.downcase() |> String.slice(0, 30) |> slugify()
 
