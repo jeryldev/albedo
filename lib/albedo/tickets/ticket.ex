@@ -163,6 +163,37 @@ defmodule Albedo.Tickets.Ticket do
     }
   end
 
+  def edit(%__MODULE__{} = ticket, changes) when is_map(changes) do
+    ticket
+    |> maybe_update_priority(changes[:priority])
+    |> maybe_update_estimate(changes[:points])
+  end
+
+  defp maybe_update_priority(ticket, nil), do: ticket
+
+  defp maybe_update_priority(ticket, priority) when is_atom(priority) do
+    if priority in @priorities do
+      %{ticket | priority: priority}
+    else
+      ticket
+    end
+  end
+
+  defp maybe_update_priority(ticket, priority) when is_binary(priority) do
+    case @priority_map[String.downcase(priority)] do
+      nil -> ticket
+      parsed -> %{ticket | priority: parsed}
+    end
+  end
+
+  defp maybe_update_estimate(ticket, nil), do: ticket
+
+  defp maybe_update_estimate(ticket, points) when is_integer(points) and points > 0 do
+    %{ticket | estimate: points}
+  end
+
+  defp maybe_update_estimate(ticket, _), do: ticket
+
   def to_json(%__MODULE__{} = ticket) do
     %{
       "id" => ticket.id,

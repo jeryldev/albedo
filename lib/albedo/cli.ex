@@ -43,7 +43,9 @@ defmodule Albedo.CLI do
           json: :boolean,
           format: :string,
           output: :string,
-          all: :boolean
+          all: :boolean,
+          priority: :string,
+          points: :integer
         ],
         aliases: [
           h: :help,
@@ -53,7 +55,8 @@ defmodule Albedo.CLI do
           n: :name,
           s: :session,
           f: :format,
-          o: :output
+          o: :output,
+          p: :priority
         ]
       )
 
@@ -137,9 +140,11 @@ defmodule Albedo.CLI do
           json: :boolean,
           format: :string,
           output: :string,
-          all: :boolean
+          all: :boolean,
+          priority: :string,
+          points: :integer
         ],
-        aliases: [s: :session, f: :format, o: :output]
+        aliases: [s: :session, f: :format, o: :output, p: :priority]
       )
 
     merged_opts = Keyword.merge(opts, extra_opts)
@@ -658,6 +663,10 @@ defmodule Albedo.CLI do
     end
   end
 
+  defp cmd_tickets(["edit", id | _], opts) do
+    edit_ticket(id, opts)
+  end
+
   defp cmd_tickets(["export" | _], opts) do
     export_tickets(opts)
   end
@@ -674,6 +683,7 @@ defmodule Albedo.CLI do
     IO.puts("  albedo tickets done <id> [ids]  Mark tickets as completed")
     IO.puts("  albedo tickets reset <id>       Reset ticket to pending")
     IO.puts("  albedo tickets reset --all      Reset all tickets")
+    IO.puts("  albedo tickets edit <id> --priority <p> --points <n>  Edit ticket")
 
     IO.puts(
       "  albedo tickets export           Export tickets (--format json|csv|markdown|github)"
@@ -740,6 +750,61 @@ defmodule Albedo.CLI do
 
           {:error, reason} ->
             print_error("Failed to save: #{inspect(reason)}")
+            halt_with_error(1)
+        end
+
+      {:error, :not_found} ->
+        print_error("No tickets.json found for this session")
+        halt_with_error(1)
+
+      {:error, reason} ->
+        print_error("Failed to load tickets: #{inspect(reason)}")
+        halt_with_error(1)
+    end
+  end
+
+  defp edit_ticket(id, opts) do
+    session_dir = resolve_session_dir(opts)
+    priority = opts[:priority]
+    points = opts[:points]
+
+    if is_nil(priority) and is_nil(points) do
+      print_error("No changes specified. Use --priority or --points")
+      IO.puts("")
+      IO.puts("Usage:")
+      IO.puts("  albedo tickets edit 1 --priority medium")
+      IO.puts("  albedo tickets edit 1 --points 5")
+      IO.puts("  albedo tickets edit 1 --priority high --points 3")
+      IO.puts("")
+      IO.puts("Priority values: urgent, high, medium, low, none")
+      halt_with_error(1)
+    end
+
+    changes = %{priority: priority, points: points}
+
+    case Tickets.load(session_dir) do
+      {:ok, data} ->
+        case Tickets.edit(data, id, changes) do
+          {:ok, updated_data, ticket} ->
+            case Tickets.save(session_dir, updated_data) do
+              :ok ->
+                changes_str =
+                  [
+                    if(priority, do: "priority=#{ticket.priority}"),
+                    if(points, do: "points=#{ticket.estimate}")
+                  ]
+                  |> Enum.reject(&is_nil/1)
+                  |> Enum.join(", ")
+
+                print_success("Ticket ##{id} updated: #{changes_str}")
+
+              {:error, reason} ->
+                print_error("Failed to save: #{inspect(reason)}")
+                halt_with_error(1)
+            end
+
+          {:error, :not_found} ->
+            print_error("Ticket ##{id} not found")
             halt_with_error(1)
         end
 
@@ -893,9 +958,11 @@ defmodule Albedo.CLI do
 
     IO.puts("")
     IO.puts("Commands:")
-    IO.puts("  albedo tickets show 1     # View ticket details")
-    IO.puts("  albedo tickets start 2    # Start working on ticket")
-    IO.puts("  albedo tickets done 1     # Mark ticket complete")
+    IO.puts("  albedo tickets show 1                   # View ticket details")
+    IO.puts("  albedo tickets start 1                  # Start working on ticket")
+    IO.puts("  albedo tickets done 1                   # Mark ticket complete")
+    IO.puts("  albedo tickets edit 1 --priority high   # Change priority")
+    IO.puts("  albedo tickets edit 1 --points 5        # Change story points")
   end
 
   defp print_ticket_detail(ticket) do

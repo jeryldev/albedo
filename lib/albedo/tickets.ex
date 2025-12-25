@@ -109,6 +109,28 @@ defmodule Albedo.Tickets do
     update_ticket_status(tickets_data, id, :reset)
   end
 
+  def edit(tickets_data, id, changes) do
+    id_str = to_string(id)
+
+    case Enum.find_index(tickets_data.tickets, &(&1.id == id_str)) do
+      nil ->
+        {:error, :not_found}
+
+      index ->
+        ticket = Enum.at(tickets_data.tickets, index)
+        updated_ticket = Ticket.edit(ticket, changes)
+        updated_tickets = List.replace_at(tickets_data.tickets, index, updated_ticket)
+
+        updated_data = %{
+          tickets_data
+          | tickets: updated_tickets,
+            summary: compute_summary(updated_tickets)
+        }
+
+        {:ok, updated_data, updated_ticket}
+    end
+  end
+
   def reset_all(tickets_data) do
     updated_tickets = Enum.map(tickets_data.tickets, &Ticket.reset/1)
     %{tickets_data | tickets: updated_tickets, summary: compute_summary(updated_tickets)}
