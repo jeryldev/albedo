@@ -100,7 +100,7 @@ defmodule Albedo.Project.State do
   """
   def new(codebase_path, task, opts \\ []) do
     now = DateTime.utc_now()
-    id = generate_id(task, opts[:project] || opts[:session])
+    id = generate_id(task, opts[:project])
     config = Albedo.Config.load!()
     project_dir = Path.join(Albedo.Config.projects_dir(config), id)
 
@@ -126,7 +126,7 @@ defmodule Albedo.Project.State do
   """
   def new_greenfield(project_name, task, opts \\ []) do
     now = DateTime.utc_now()
-    id = generate_id(task, opts[:project] || opts[:session])
+    id = generate_id(task, opts[:project])
     config = Albedo.Config.load!()
     project_dir = Path.join(Albedo.Config.projects_dir(config), id)
 
@@ -156,16 +156,8 @@ defmodule Albedo.Project.State do
   """
   def load(project_dir) do
     project_file = Path.join(project_dir, "project.json")
-    legacy_file = Path.join(project_dir, "session.json")
 
-    file_to_load =
-      cond do
-        File.exists?(project_file) -> project_file
-        File.exists?(legacy_file) -> legacy_file
-        true -> project_file
-      end
-
-    with {:ok, content} <- File.read(file_to_load),
+    with {:ok, content} <- File.read(project_file),
          {:ok, data} <- Jason.decode(content) do
       {:ok, from_json(data, project_dir)}
     end

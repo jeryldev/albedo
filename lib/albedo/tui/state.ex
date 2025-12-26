@@ -114,18 +114,15 @@ defmodule Albedo.TUI.State do
 
   defp has_project_file?(projects_dir, dir) do
     project_file = Path.join([projects_dir, dir, "project.json"])
-    legacy_file = Path.join([projects_dir, dir, "session.json"])
-    File.exists?(project_file) or File.exists?(legacy_file)
+    File.exists?(project_file)
   end
 
   defp load_project_info(projects_dir, id, index) do
     project_file = Path.join([projects_dir, id, "project.json"])
-    legacy_file = Path.join([projects_dir, id, "session.json"])
-    file_to_load = if File.exists?(project_file), do: project_file, else: legacy_file
     base = %{id: id, index: index, state: "unknown", task: ""}
 
-    with true <- File.exists?(file_to_load),
-         {:ok, content} <- File.read(file_to_load),
+    with true <- File.exists?(project_file),
+         {:ok, content} <- File.read(project_file),
          {:ok, data} <- Jason.decode(content) do
       %{
         base

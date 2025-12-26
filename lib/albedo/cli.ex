@@ -464,10 +464,7 @@ defmodule Albedo.CLI do
 
   defp print_project_info(project, projects_dir) do
     project_file = Path.join([projects_dir, project, "project.json"])
-    legacy_file = Path.join([projects_dir, project, "session.json"])
-
-    file_to_load = if File.exists?(project_file), do: project_file, else: legacy_file
-    {state, task} = load_project_metadata(file_to_load)
+    {state, task} = load_project_metadata(project_file)
     print_project(project, state, task)
   end
 

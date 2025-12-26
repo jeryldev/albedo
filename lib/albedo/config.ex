@@ -142,10 +142,7 @@ defmodule Albedo.Config do
   Get the projects directory, expanded.
   """
   def projects_dir(config) do
-    dir =
-      get(config, ["output", "projects_dir"]) || get(config, ["output", "session_dir"]) ||
-        "~/.albedo/projects"
-
+    dir = get(config, ["output", "projects_dir"]) || "~/.albedo/projects"
     Path.expand(dir)
   end
 

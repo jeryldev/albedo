@@ -548,15 +548,12 @@ defmodule Albedo.TUI do
       project ->
         project_path = Path.join(projects_dir, project.id)
         project_file = Path.join(project_path, "project.json")
-        legacy_file = Path.join(project_path, "session.json")
 
-        file_to_use = if File.exists?(project_file), do: project_file, else: legacy_file
-
-        with {:ok, content} <- File.read(file_to_use),
+        with {:ok, content} <- File.read(project_file),
              {:ok, data} <- Jason.decode(content) do
           updated_data = Map.put(data, "task", task)
 
-          case File.write(file_to_use, Jason.encode!(updated_data, pretty: true)) do
+          case File.write(project_file, Jason.encode!(updated_data, pretty: true)) do
             :ok ->
               state
               |> State.exit_input_mode()

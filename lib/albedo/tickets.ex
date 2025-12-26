@@ -275,7 +275,7 @@ defmodule Albedo.Tickets do
   defp from_json(data) do
     %{
       version: data["version"] || @version,
-      project_id: data["project_id"] || data["session_id"],
+      project_id: data["project_id"],
       project_name: data["project_name"],
       task_description: data["task_description"],
       created_at: data["created_at"],

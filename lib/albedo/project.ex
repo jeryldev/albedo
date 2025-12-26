@@ -104,22 +104,13 @@ defmodule Albedo.Project do
 
   defp has_project_file?(projects_dir, dir) do
     project_file = Path.join([projects_dir, dir, "project.json"])
-    legacy_file = Path.join([projects_dir, dir, "session.json"])
-    File.exists?(project_file) or File.exists?(legacy_file)
+    File.exists?(project_file)
   end
 
   defp load_project_info(projects_dir, id) do
     project_file = Path.join([projects_dir, id, "project.json"])
-    legacy_file = Path.join([projects_dir, id, "session.json"])
 
-    file_to_load =
-      cond do
-        File.exists?(project_file) -> project_file
-        File.exists?(legacy_file) -> legacy_file
-        true -> project_file
-      end
-
-    with {:ok, content} <- File.read(file_to_load),
+    with {:ok, content} <- File.read(project_file),
          {:ok, data} <- Jason.decode(content) do
       %{
         id: id,
@@ -142,19 +133,11 @@ defmodule Albedo.Project do
 
   defp update_project_id(project_dir, new_id) do
     project_file = Path.join(project_dir, "project.json")
-    legacy_file = Path.join(project_dir, "session.json")
 
-    file_to_update =
-      cond do
-        File.exists?(project_file) -> project_file
-        File.exists?(legacy_file) -> legacy_file
-        true -> project_file
-      end
-
-    with {:ok, content} <- File.read(file_to_update),
+    with {:ok, content} <- File.read(project_file),
          {:ok, data} <- Jason.decode(content) do
       updated_data = Map.put(data, "id", new_id)
-      File.write(file_to_update, Jason.encode!(updated_data, pretty: true))
+      File.write(project_file, Jason.encode!(updated_data, pretty: true))
     end
   end
 
