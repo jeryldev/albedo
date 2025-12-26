@@ -180,6 +180,247 @@ defmodule Albedo.TicketsTest do
     end
   end
 
+  describe "add/2" do
+    @describetag :add
+
+    setup do
+      existing_ticket = Ticket.new(%{id: "1", title: "Existing ticket", estimate: 3})
+      data = Tickets.new("test-session", "Test task", [existing_ticket])
+      {:ok, data: data, existing_ticket: existing_ticket}
+    end
+
+    test "given existing tickets, when adding new ticket, then auto-generates next id", %{
+      data: data
+    } do
+      {:ok, updated_data, ticket} = Tickets.add(data, %{title: "New ticket"})
+
+      assert ticket.id == "2"
+      assert ticket.title == "New ticket"
+      assert ticket.status == :pending
+      assert length(updated_data.tickets) == 2
+    end
+
+    test "given empty ticket list, when adding first ticket, then generates id 1" do
+      empty_data = Tickets.new("test", "task", [])
+
+      {:ok, updated_data, ticket} = Tickets.add(empty_data, %{title: "First ticket"})
+
+      assert ticket.id == "1"
+      assert length(updated_data.tickets) == 1
+    end
+
+    test "given all attributes provided, when adding ticket, then all fields are set correctly" do
+      empty_data = Tickets.new("test", "task", [])
+
+      attrs = %{
+        title: "Bug fix",
+        description: "Fix the login issue",
+        priority: "high",
+        estimate: 5,
+        type: "bugfix",
+        labels: "auth,urgent"
+      }
+
+      {:ok, _updated_data, ticket} = Tickets.add(empty_data, attrs)
+
+      assert ticket.title == "Bug fix"
+      assert ticket.description == "Fix the login issue"
+      assert ticket.priority == :high
+      assert ticket.estimate == 5
+      assert ticket.type == :bugfix
+      assert ticket.labels == ["auth", "urgent"]
+    end
+
+    test "given existing tickets with points, when adding ticket with points, then summary is updated",
+         %{data: data} do
+      {:ok, updated_data, _ticket} = Tickets.add(data, %{title: "T2", estimate: 5})
+
+      assert updated_data.summary.total == 2
+      assert updated_data.summary.pending == 2
+      assert updated_data.summary.total_points == 8
+    end
+
+    test "given non-sequential ticket ids, when adding ticket, then uses max id + 1" do
+      tickets = [
+        Ticket.new(%{id: "5", title: "T5"}),
+        Ticket.new(%{id: "10", title: "T10"})
+      ]
+
+      data = Tickets.new("test", "task", tickets)
+
+      {:ok, _updated_data, ticket} = Tickets.add(data, %{title: "New"})
+
+      assert ticket.id == "11"
+    end
+  end
+
+  describe "delete/2" do
+    @describetag :delete
+
+    setup do
+      tickets = [
+        Ticket.new(%{id: "1", title: "First ticket", estimate: 3}),
+        Ticket.new(%{id: "2", title: "Second ticket", estimate: 5}),
+        Ticket.new(%{id: "3", title: "Third ticket", estimate: 8})
+      ]
+
+      data = Tickets.new("test-session", "Test task", tickets)
+      {:ok, data: data}
+    end
+
+    test "given existing ticket, when deleting by id, then removes ticket and returns it", %{
+      data: data
+    } do
+      {:ok, updated_data, deleted_ticket} = Tickets.delete(data, "2")
+
+      assert deleted_ticket.id == "2"
+      assert deleted_ticket.title == "Second ticket"
+      assert length(updated_data.tickets) == 2
+      refute Enum.any?(updated_data.tickets, &(&1.id == "2"))
+    end
+
+    test "given existing ticket, when deleting, then summary is recalculated", %{data: data} do
+      assert data.summary.total == 3
+      assert data.summary.total_points == 16
+
+      {:ok, updated_data, _deleted} = Tickets.delete(data, "2")
+
+      assert updated_data.summary.total == 2
+      assert updated_data.summary.total_points == 11
+    end
+
+    test "given non-existent ticket id, when deleting, then returns not_found error", %{
+      data: data
+    } do
+      assert {:error, :not_found} = Tickets.delete(data, "999")
+    end
+
+    test "given integer id, when deleting, then converts to string and finds ticket", %{
+      data: data
+    } do
+      {:ok, updated_data, deleted_ticket} = Tickets.delete(data, 1)
+
+      assert deleted_ticket.id == "1"
+      assert length(updated_data.tickets) == 2
+    end
+
+    test "given multiple deletions, when deleting sequentially, then each deletion works correctly",
+         %{data: data} do
+      {:ok, data_after_first, _} = Tickets.delete(data, "1")
+      {:ok, data_after_second, _} = Tickets.delete(data_after_first, "2")
+
+      assert length(data_after_second.tickets) == 1
+      assert hd(data_after_second.tickets).id == "3"
+    end
+  end
+
+  describe "edit/3" do
+    @describetag :edit
+
+    setup do
+      tickets = [
+        Ticket.new(%{id: "1", title: "First ticket", description: "Original desc", estimate: 3}),
+        Ticket.new(%{id: "2", title: "Second ticket", estimate: 5})
+      ]
+
+      data = Tickets.new("test-session", "Test task", tickets)
+      {:ok, data: data}
+    end
+
+    test "given existing ticket, when editing title, then updates ticket and returns it", %{
+      data: data
+    } do
+      {:ok, updated_data, ticket} = Tickets.edit(data, "1", %{title: "New title"})
+
+      assert ticket.title == "New title"
+      assert ticket.description == "Original desc"
+      assert Tickets.get(updated_data, "1").title == "New title"
+    end
+
+    test "given existing ticket, when editing description, then updates only description", %{
+      data: data
+    } do
+      {:ok, updated_data, ticket} = Tickets.edit(data, "1", %{description: "New description"})
+
+      assert ticket.description == "New description"
+      assert ticket.title == "First ticket"
+      assert Tickets.get(updated_data, "1").description == "New description"
+    end
+
+    test "given existing ticket, when editing priority, then updates priority and recalculates summary",
+         %{data: data} do
+      {:ok, updated_data, ticket} = Tickets.edit(data, "1", %{priority: :high})
+
+      assert ticket.priority == :high
+      assert updated_data.summary.total == 2
+    end
+
+    test "given existing ticket, when editing points, then updates estimate and recalculates summary",
+         %{data: data} do
+      {:ok, updated_data, ticket} = Tickets.edit(data, "1", %{points: 8})
+
+      assert ticket.estimate == 8
+      assert updated_data.summary.total_points == 13
+    end
+
+    test "given existing ticket, when editing status to completed, then updates summary", %{
+      data: data
+    } do
+      {:ok, updated_data, ticket} = Tickets.edit(data, "1", %{status: :completed})
+
+      assert ticket.status == :completed
+      assert updated_data.summary.completed == 1
+      assert updated_data.summary.completed_points == 3
+    end
+
+    test "given existing ticket, when editing type, then updates type", %{data: data} do
+      {:ok, _updated_data, ticket} = Tickets.edit(data, "1", %{type: :bugfix})
+
+      assert ticket.type == :bugfix
+    end
+
+    test "given existing ticket, when editing labels with string, then parses labels", %{
+      data: data
+    } do
+      {:ok, _updated_data, ticket} = Tickets.edit(data, "1", %{labels: "api,backend"})
+
+      assert ticket.labels == ["api", "backend"]
+    end
+
+    test "given existing ticket, when editing multiple fields, then updates all fields", %{
+      data: data
+    } do
+      changes = %{
+        title: "Updated title",
+        description: "Updated desc",
+        priority: :urgent,
+        points: 13,
+        type: :bugfix,
+        labels: ["critical"]
+      }
+
+      {:ok, updated_data, ticket} = Tickets.edit(data, "1", changes)
+
+      assert ticket.title == "Updated title"
+      assert ticket.description == "Updated desc"
+      assert ticket.priority == :urgent
+      assert ticket.estimate == 13
+      assert ticket.type == :bugfix
+      assert ticket.labels == ["critical"]
+      assert updated_data.summary.total_points == 18
+    end
+
+    test "given integer id, when editing, then converts to string and finds ticket", %{data: data} do
+      {:ok, _updated_data, ticket} = Tickets.edit(data, 1, %{title: "Updated"})
+
+      assert ticket.title == "Updated"
+    end
+
+    test "given non-existent ticket id, when editing, then returns not_found error", %{data: data} do
+      assert {:error, :not_found} = Tickets.edit(data, "999", %{title: "New"})
+    end
+  end
+
   describe "compute_summary/1" do
     test "calculates correct summary" do
       tickets = [

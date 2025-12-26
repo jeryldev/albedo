@@ -2,7 +2,11 @@ defmodule Albedo.Tickets.Ticket do
   @moduledoc """
   Ticket struct representing a single work item.
   Designed for CLI display and export to external systems (Linear, Jira, GitHub Issues, Asana).
+
+  Uses schemaless changeset patterns for consistent validation and casting.
   """
+
+  alias Albedo.Changeset
 
   @enforce_keys [:id, :title]
   defstruct [
@@ -70,24 +74,7 @@ defmodule Albedo.Tickets.Ticket do
   @types [:feature, :enhancement, :bugfix, :chore, :docs, :test]
   @priorities [:urgent, :high, :medium, :low, :none]
 
-  @estimate_map %{
-    "trivial" => 1,
-    "small" => 2,
-    "medium" => 3,
-    "large" => 5,
-    "extra large" => 8,
-    "epic" => 13
-  }
-
-  @priority_map %{
-    "urgent" => :urgent,
-    "high" => :high,
-    "medium" => :medium,
-    "low" => :low,
-    "none" => :none
-  }
-
-  @type_map %{
+  @type_mapping %{
     "task" => :feature,
     "story" => :feature,
     "feature" => :feature,
@@ -100,38 +87,126 @@ defmodule Albedo.Tickets.Ticket do
     "test" => :test
   }
 
+  @priority_mapping %{
+    "urgent" => :urgent,
+    "high" => :high,
+    "medium" => :medium,
+    "low" => :low,
+    "none" => :none
+  }
+
+  @status_mapping %{
+    "pending" => :pending,
+    "in_progress" => :in_progress,
+    "completed" => :completed
+  }
+
+  @estimate_mapping %{
+    "trivial" => 1,
+    "small" => 2,
+    "medium" => 3,
+    "large" => 5,
+    "extra large" => 8,
+    "epic" => 13
+  }
+
+  @types_schema %{
+    id: :string,
+    title: :string,
+    description: :string,
+    type: {:enum, @types, @type_mapping},
+    status: {:enum, @statuses, @status_mapping},
+    priority: {:enum, @priorities, @priority_mapping},
+    estimate: :integer,
+    labels: :list,
+    acceptance_criteria: :list,
+    implementation_notes: :string
+  }
+
+  @edit_fields [:title, :description, :type, :status, :priority, :estimate, :labels]
+
   def statuses, do: @statuses
   def types, do: @types
   def priorities, do: @priorities
 
-  def new(attrs) when is_map(attrs) do
-    now = DateTime.utc_now()
+  @doc """
+  Creates a new ticket from attributes.
+  Uses changeset for casting and validation.
 
-    %__MODULE__{
-      id: Map.get(attrs, :id) || Map.get(attrs, "id"),
-      title: Map.get(attrs, :title) || Map.get(attrs, "title"),
-      description: Map.get(attrs, :description) || Map.get(attrs, "description"),
-      type: parse_type(Map.get(attrs, :type) || Map.get(attrs, "type")),
-      status: parse_status(Map.get(attrs, :status) || Map.get(attrs, "status")),
-      priority: parse_priority(Map.get(attrs, :priority) || Map.get(attrs, "priority")),
-      estimate: parse_estimate(Map.get(attrs, :estimate) || Map.get(attrs, "estimate")),
-      labels: parse_labels(Map.get(attrs, :labels) || Map.get(attrs, "labels")),
-      acceptance_criteria:
-        List.wrap(
-          Map.get(attrs, :acceptance_criteria) || Map.get(attrs, "acceptance_criteria") || []
-        ),
-      implementation_notes:
-        Map.get(attrs, :implementation_notes) || Map.get(attrs, "implementation_notes"),
-      files: parse_files(Map.get(attrs, :files) || Map.get(attrs, "files")),
-      dependencies:
-        parse_dependencies(Map.get(attrs, :dependencies) || Map.get(attrs, "dependencies")),
-      external_refs: %{linear: nil, jira: nil, github: nil, asana: nil},
-      timestamps: %{
-        created_at: now,
-        started_at: nil,
-        completed_at: nil
-      }
-    }
+  ## Examples
+
+      iex> Ticket.new(%{id: "1", title: "Fix bug"})
+      %Ticket{id: "1", title: "Fix bug", status: :pending, ...}
+
+      iex> Ticket.new(%{"id" => "1", "title" => "Fix bug", "priority" => "high"})
+      %Ticket{id: "1", title: "Fix bug", priority: :high, ...}
+  """
+  def new(attrs) when is_map(attrs) do
+    attrs = normalize_attrs(attrs)
+
+    changeset =
+      {defaults(), @types_schema}
+      |> Changeset.cast(attrs, Map.keys(@types_schema))
+      |> cast_estimate(attrs)
+      |> Changeset.validate_required([:id, :title])
+
+    data = Changeset.apply_changes(changeset)
+    build_ticket(data, attrs)
+  end
+
+  @doc """
+  Returns a changeset for creating a new ticket.
+  Useful for validation before creation.
+  """
+  def create_changeset(attrs) when is_map(attrs) do
+    attrs = normalize_attrs(attrs)
+
+    {defaults(), @types_schema}
+    |> Changeset.cast(attrs, Map.keys(@types_schema))
+    |> cast_estimate(attrs)
+    |> Changeset.validate_required([:id, :title])
+  end
+
+  @doc """
+  Edits a ticket with the given changes.
+  Uses changeset for casting and validation.
+
+  ## Examples
+
+      iex> ticket = Ticket.new(%{id: "1", title: "Original"})
+      iex> Ticket.edit(ticket, %{title: "Updated"})
+      %Ticket{id: "1", title: "Updated", ...}
+  """
+  def edit(%__MODULE__{} = ticket, changes) when is_map(changes) do
+    changes = normalize_attrs(changes)
+    changes = rename_points_to_estimate(changes)
+
+    current_data = ticket_to_data(ticket)
+
+    changeset =
+      {current_data, @types_schema}
+      |> Changeset.cast(changes, @edit_fields)
+      |> validate_non_empty_title()
+      |> validate_positive_estimate()
+
+    updated_data = Changeset.apply_changes(changeset)
+    data_to_ticket(updated_data, ticket)
+  end
+
+  @doc """
+  Returns a changeset for editing a ticket.
+  Useful for validation before applying changes.
+  """
+  def edit_changeset(%__MODULE__{} = ticket, changes) when is_map(changes) do
+    changes = normalize_attrs(changes)
+    changes = rename_points_to_estimate(changes)
+
+    current_data = ticket_to_data(ticket)
+
+    {current_data, @types_schema}
+    |> Changeset.cast(changes, @edit_fields)
+    |> validate_non_empty_title()
+    |> validate_positive_estimate()
   end
 
   def start(%__MODULE__{status: :pending} = ticket) do
@@ -162,37 +237,6 @@ defmodule Albedo.Tickets.Ticket do
         timestamps: %{ticket.timestamps | started_at: nil, completed_at: nil}
     }
   end
-
-  def edit(%__MODULE__{} = ticket, changes) when is_map(changes) do
-    ticket
-    |> maybe_update_priority(changes[:priority])
-    |> maybe_update_estimate(changes[:points])
-  end
-
-  defp maybe_update_priority(ticket, nil), do: ticket
-
-  defp maybe_update_priority(ticket, priority) when is_atom(priority) do
-    if priority in @priorities do
-      %{ticket | priority: priority}
-    else
-      ticket
-    end
-  end
-
-  defp maybe_update_priority(ticket, priority) when is_binary(priority) do
-    case @priority_map[String.downcase(priority)] do
-      nil -> ticket
-      parsed -> %{ticket | priority: parsed}
-    end
-  end
-
-  defp maybe_update_estimate(ticket, nil), do: ticket
-
-  defp maybe_update_estimate(ticket, points) when is_integer(points) and points > 0 do
-    %{ticket | estimate: points}
-  end
-
-  defp maybe_update_estimate(ticket, _), do: ticket
 
   def to_json(%__MODULE__{} = ticket) do
     %{
@@ -232,37 +276,135 @@ defmodule Albedo.Tickets.Ticket do
     }
   end
 
-  defp parse_type(nil), do: :feature
-  defp parse_type(type) when is_atom(type) and type in @types, do: type
-  defp parse_type(type) when is_binary(type), do: @type_map[String.downcase(type)] || :feature
+  defp defaults do
+    %{
+      id: nil,
+      title: nil,
+      description: nil,
+      type: :feature,
+      status: :pending,
+      priority: :medium,
+      estimate: nil,
+      labels: [],
+      acceptance_criteria: [],
+      implementation_notes: nil
+    }
+  end
 
-  defp parse_status(nil), do: :pending
-  defp parse_status(status) when is_atom(status) and status in @statuses, do: status
+  defp normalize_attrs(attrs) do
+    Enum.reduce(attrs, %{}, fn
+      {key, value}, acc when is_binary(key) ->
+        Map.put(acc, String.to_existing_atom(key), value)
 
-  defp parse_status(status) when is_binary(status) do
-    case String.downcase(status) do
-      "pending" -> :pending
-      "in_progress" -> :in_progress
-      "completed" -> :completed
-      _ -> :pending
+      {key, value}, acc when is_atom(key) ->
+        Map.put(acc, key, value)
+    end)
+  rescue
+    ArgumentError -> attrs
+  end
+
+  defp rename_points_to_estimate(attrs) do
+    case Map.pop(attrs, :points) do
+      {nil, attrs} -> attrs
+      {points, attrs} -> Map.put(attrs, :estimate, points)
     end
   end
 
-  defp parse_priority(nil), do: :medium
-  defp parse_priority(priority) when is_atom(priority) and priority in @priorities, do: priority
+  defp cast_estimate(changeset, attrs) do
+    estimate = Map.get(attrs, :estimate) || Map.get(attrs, "estimate")
 
-  defp parse_priority(priority) when is_binary(priority),
-    do: @priority_map[String.downcase(priority)] || :medium
+    cond do
+      is_nil(estimate) ->
+        changeset
 
-  defp parse_estimate(nil), do: nil
-  defp parse_estimate(est) when is_integer(est), do: est
-  defp parse_estimate(est) when is_binary(est), do: @estimate_map[String.downcase(est)]
+      is_integer(estimate) and estimate > 0 ->
+        Changeset.put_change(changeset, :estimate, estimate)
 
-  defp parse_labels(nil), do: []
-  defp parse_labels(labels) when is_list(labels), do: labels
+      is_binary(estimate) ->
+        case @estimate_mapping[String.downcase(estimate)] do
+          nil -> changeset
+          points -> Changeset.put_change(changeset, :estimate, points)
+        end
 
-  defp parse_labels(labels) when is_binary(labels),
-    do: String.split(labels, ~r/[,\s]+/, trim: true)
+      true ->
+        changeset
+    end
+  end
+
+  defp validate_non_empty_title(%Changeset{} = changeset) do
+    case Changeset.get_change(changeset, :title) do
+      "" -> %{changeset | changes: Map.delete(changeset.changes, :title)}
+      _ -> changeset
+    end
+  end
+
+  defp validate_positive_estimate(%Changeset{} = changeset) do
+    case Changeset.get_change(changeset, :estimate) do
+      nil -> changeset
+      est when is_integer(est) and est > 0 -> changeset
+      _ -> %{changeset | changes: Map.delete(changeset.changes, :estimate)}
+    end
+  end
+
+  defp build_ticket(data, attrs) do
+    now = DateTime.utc_now()
+
+    %__MODULE__{
+      id: data.id,
+      title: data.title,
+      description: data.description,
+      type: data.type || :feature,
+      status: data.status || :pending,
+      priority: data.priority || :medium,
+      estimate: data.estimate,
+      labels: data.labels || [],
+      acceptance_criteria: parse_acceptance_criteria(attrs),
+      implementation_notes: data.implementation_notes,
+      files: parse_files(Map.get(attrs, :files)),
+      dependencies: parse_dependencies(Map.get(attrs, :dependencies)),
+      external_refs: %{linear: nil, jira: nil, github: nil, asana: nil},
+      timestamps: %{created_at: now, started_at: nil, completed_at: nil}
+    }
+  end
+
+  defp ticket_to_data(%__MODULE__{} = ticket) do
+    %{
+      id: ticket.id,
+      title: ticket.title,
+      description: ticket.description,
+      type: ticket.type,
+      status: ticket.status,
+      priority: ticket.priority,
+      estimate: ticket.estimate,
+      labels: ticket.labels,
+      acceptance_criteria: ticket.acceptance_criteria,
+      implementation_notes: ticket.implementation_notes
+    }
+  end
+
+  defp data_to_ticket(data, original_ticket) do
+    %__MODULE__{
+      id: data.id,
+      title: data.title,
+      description: data.description,
+      type: data.type,
+      status: data.status,
+      priority: data.priority,
+      estimate: data.estimate,
+      labels: data.labels,
+      acceptance_criteria: original_ticket.acceptance_criteria,
+      implementation_notes: data.implementation_notes,
+      files: original_ticket.files,
+      dependencies: original_ticket.dependencies,
+      external_refs: original_ticket.external_refs,
+      timestamps: original_ticket.timestamps
+    }
+  end
+
+  defp parse_acceptance_criteria(attrs) do
+    value = Map.get(attrs, :acceptance_criteria)
+    List.wrap(value || [])
+  end
 
   defp parse_files(nil), do: %{create: [], modify: []}
   defp parse_files(%{"create" => c, "modify" => m}), do: %{create: c || [], modify: m || []}

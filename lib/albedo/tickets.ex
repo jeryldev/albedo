@@ -131,6 +131,55 @@ defmodule Albedo.Tickets do
     end
   end
 
+  def add(tickets_data, attrs) do
+    next_id = compute_next_id(tickets_data.tickets)
+    ticket = Ticket.new(Map.put(attrs, :id, next_id))
+    updated_tickets = tickets_data.tickets ++ [ticket]
+
+    updated_data = %{
+      tickets_data
+      | tickets: updated_tickets,
+        summary: compute_summary(updated_tickets)
+    }
+
+    {:ok, updated_data, ticket}
+  end
+
+  def delete(tickets_data, id) do
+    id_str = to_string(id)
+
+    case Enum.find_index(tickets_data.tickets, &(&1.id == id_str)) do
+      nil ->
+        {:error, :not_found}
+
+      index ->
+        deleted_ticket = Enum.at(tickets_data.tickets, index)
+        updated_tickets = List.delete_at(tickets_data.tickets, index)
+
+        updated_data = %{
+          tickets_data
+          | tickets: updated_tickets,
+            summary: compute_summary(updated_tickets)
+        }
+
+        {:ok, updated_data, deleted_ticket}
+    end
+  end
+
+  defp compute_next_id(tickets) do
+    max_id =
+      tickets
+      |> Enum.map(fn t ->
+        case Integer.parse(t.id) do
+          {num, _} -> num
+          :error -> 0
+        end
+      end)
+      |> Enum.max(fn -> 0 end)
+
+    to_string(max_id + 1)
+  end
+
   def reset_all(tickets_data) do
     updated_tickets = Enum.map(tickets_data.tickets, &Ticket.reset/1)
     %{tickets_data | tickets: updated_tickets, summary: compute_summary(updated_tickets)}

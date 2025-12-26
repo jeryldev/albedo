@@ -45,7 +45,12 @@ defmodule Albedo.CLI do
           output: :string,
           all: :boolean,
           priority: :string,
-          points: :integer
+          points: :integer,
+          title: :string,
+          description: :string,
+          type: :string,
+          labels: :string,
+          yes: :boolean
         ],
         aliases: [
           h: :help,
@@ -56,7 +61,9 @@ defmodule Albedo.CLI do
           s: :session,
           f: :format,
           o: :output,
-          p: :priority
+          p: :priority,
+          d: :description,
+          y: :yes
         ]
       )
 
@@ -142,9 +149,22 @@ defmodule Albedo.CLI do
           output: :string,
           all: :boolean,
           priority: :string,
-          points: :integer
+          points: :integer,
+          title: :string,
+          description: :string,
+          type: :string,
+          labels: :string,
+          yes: :boolean
         ],
-        aliases: [s: :session, f: :format, o: :output, p: :priority]
+        aliases: [
+          s: :session,
+          f: :format,
+          o: :output,
+          p: :priority,
+          t: :title,
+          d: :description,
+          y: :yes
+        ]
       )
 
     merged_opts = Keyword.merge(opts, extra_opts)
@@ -663,6 +683,15 @@ defmodule Albedo.CLI do
     end
   end
 
+  defp cmd_tickets(["add" | rest], opts) do
+    title = opts[:title] || List.first(rest)
+    add_ticket(title, opts)
+  end
+
+  defp cmd_tickets(["delete" | ids], opts) do
+    delete_tickets(ids, opts)
+  end
+
   defp cmd_tickets(["edit", id | _], opts) do
     edit_ticket(id, opts)
   end
@@ -679,6 +708,8 @@ defmodule Albedo.CLI do
     IO.puts("  albedo tickets --session <id>   List tickets from specific session")
     IO.puts("  albedo tickets --status pending Filter by status")
     IO.puts("  albedo tickets show <id>        Show ticket details")
+    IO.puts("  albedo tickets add \"title\"      Add new ticket")
+    IO.puts("  albedo tickets delete <id>      Delete ticket (with confirmation)")
     IO.puts("  albedo tickets start <id>       Mark ticket as in_progress")
     IO.puts("  albedo tickets done <id> [ids]  Mark tickets as completed")
     IO.puts("  albedo tickets reset <id>       Reset ticket to pending")
@@ -763,59 +794,228 @@ defmodule Albedo.CLI do
     end
   end
 
-  defp edit_ticket(id, opts) do
+  defp add_ticket(nil, _opts) do
+    print_error("Title is required")
+
+    IO.puts(~S"""
+
+    Usage:
+      albedo tickets add "Title here"
+      albedo tickets add --title "Title here"
+      albedo tickets add "Title" --description "Details" --priority high --points 5
+      albedo tickets add "Title" --type bugfix --labels "backend,urgent"
+
+    Options:
+      --title, -t       Ticket title (required)
+      --description, -d Ticket description
+      --priority, -p    Priority: urgent, high, medium (default), low, none
+      --points          Story points (1, 2, 3, 5, 8, 13)
+      --type            Type: feature (default), bugfix, chore, docs, test
+      --labels          Comma-separated labels
+    """)
+
+    halt_with_error(1)
+  end
+
+  defp add_ticket(title, opts) do
     session_dir = resolve_session_dir(opts)
-    priority = opts[:priority]
-    points = opts[:points]
 
-    if is_nil(priority) and is_nil(points) do
-      print_error("No changes specified. Use --priority or --points")
-      IO.puts("")
-      IO.puts("Usage:")
-      IO.puts("  albedo tickets edit 1 --priority medium")
-      IO.puts("  albedo tickets edit 1 --points 5")
-      IO.puts("  albedo tickets edit 1 --priority high --points 3")
-      IO.puts("")
-      IO.puts("Priority values: urgent, high, medium, low, none")
-      halt_with_error(1)
-    end
+    attrs = %{
+      title: title,
+      description: opts[:description],
+      priority: opts[:priority],
+      estimate: opts[:points],
+      type: opts[:type],
+      labels: opts[:labels]
+    }
 
-    changes = %{priority: priority, points: points}
+    {:ok, data} = load_tickets_or_error(session_dir)
+    {:ok, updated_data, ticket} = Tickets.add(data, attrs)
+    :ok = save_tickets_or_error(session_dir, updated_data)
+    print_add_success(ticket)
+  end
 
+  defp print_add_success(ticket) do
+    print_success("Ticket ##{ticket.id} created: #{ticket.title}")
+
+    details =
+      [
+        if(ticket.priority != :medium, do: "priority=#{ticket.priority}"),
+        if(ticket.estimate, do: "points=#{ticket.estimate}"),
+        if(ticket.type != :feature, do: "type=#{ticket.type}"),
+        if(ticket.labels != [], do: "labels=#{Enum.join(ticket.labels, ",")}")
+      ]
+      |> Enum.reject(&is_nil/1)
+
+    if details != [], do: IO.puts("  #{Enum.join(details, ", ")}")
+  end
+
+  defp load_tickets_or_error(session_dir) do
     case Tickets.load(session_dir) do
       {:ok, data} ->
-        case Tickets.edit(data, id, changes) do
-          {:ok, updated_data, ticket} ->
-            case Tickets.save(session_dir, updated_data) do
-              :ok ->
-                changes_str =
-                  [
-                    if(priority, do: "priority=#{ticket.priority}"),
-                    if(points, do: "points=#{ticket.estimate}")
-                  ]
-                  |> Enum.reject(&is_nil/1)
-                  |> Enum.join(", ")
-
-                print_success("Ticket ##{id} updated: #{changes_str}")
-
-              {:error, reason} ->
-                print_error("Failed to save: #{inspect(reason)}")
-                halt_with_error(1)
-            end
-
-          {:error, :not_found} ->
-            print_error("Ticket ##{id} not found")
-            halt_with_error(1)
-        end
+        {:ok, data}
 
       {:error, :not_found} ->
         print_error("No tickets.json found for this session")
+        print_info("Run 'albedo analyze' first to generate tickets")
         halt_with_error(1)
 
       {:error, reason} ->
         print_error("Failed to load tickets: #{inspect(reason)}")
         halt_with_error(1)
     end
+  end
+
+  defp save_tickets_or_error(session_dir, data) do
+    case Tickets.save(session_dir, data) do
+      :ok ->
+        :ok
+
+      {:error, reason} ->
+        print_error("Failed to save: #{inspect(reason)}")
+        halt_with_error(1)
+    end
+  end
+
+  defp delete_tickets([], _opts) do
+    print_error("No ticket ID specified")
+
+    IO.puts("""
+
+    Usage:
+      albedo tickets delete <id>            Delete a ticket (with confirmation)
+      albedo tickets delete <id> --yes      Delete without confirmation
+      albedo tickets delete 1 2 3           Delete multiple tickets
+    """)
+
+    halt_with_error(1)
+  end
+
+  defp delete_tickets(ids, opts) do
+    session_dir = resolve_session_dir(opts)
+    skip_confirm = opts[:yes] == true
+
+    {:ok, data} = load_tickets_or_error(session_dir)
+    tickets_to_delete = find_tickets_to_delete(data, ids)
+    validate_tickets_found(tickets_to_delete)
+
+    if confirm_deletion(tickets_to_delete, skip_confirm) do
+      execute_deletion(data, ids, session_dir)
+    else
+      IO.puts("Cancelled")
+    end
+  end
+
+  defp find_tickets_to_delete(data, ids) do
+    ids
+    |> Enum.map(&Tickets.get(data, &1))
+    |> Enum.reject(&is_nil/1)
+  end
+
+  defp validate_tickets_found([]) do
+    print_error("No matching tickets found")
+    halt_with_error(1)
+  end
+
+  defp validate_tickets_found(_tickets), do: :ok
+
+  defp confirm_deletion(_tickets, true), do: true
+
+  defp confirm_deletion(tickets, false) do
+    IO.puts("About to delete #{length(tickets)} ticket(s):")
+    Enum.each(tickets, fn t -> IO.puts("  ##{t.id}: #{t.title}") end)
+    IO.puts("")
+    response = IO.gets("Are you sure? [y/N] ") |> String.trim() |> String.downcase()
+    response in ["y", "yes"]
+  end
+
+  defp execute_deletion(data, ids, session_dir) do
+    {final_data, deleted_count} =
+      Enum.reduce(ids, {data, 0}, fn id, {acc_data, count} ->
+        case Tickets.delete(acc_data, id) do
+          {:ok, updated_data, _ticket} -> {updated_data, count + 1}
+          {:error, :not_found} -> {acc_data, count}
+        end
+      end)
+
+    :ok = save_tickets_or_error(session_dir, final_data)
+    print_success("Deleted #{deleted_count} ticket(s)")
+  end
+
+  defp edit_ticket(id, opts) do
+    changes = build_edit_changes(opts)
+
+    if changes == %{} do
+      print_edit_usage()
+      halt_with_error(1)
+    end
+
+    session_dir = resolve_session_dir(opts)
+    {:ok, data} = load_tickets_or_error(session_dir)
+
+    case Tickets.edit(data, id, changes) do
+      {:ok, updated_data, ticket} ->
+        :ok = save_tickets_or_error(session_dir, updated_data)
+        print_edit_success(id, ticket, changes)
+
+      {:error, :not_found} ->
+        print_error("Ticket ##{id} not found")
+        halt_with_error(1)
+    end
+  end
+
+  defp build_edit_changes(opts) do
+    %{
+      title: opts[:title],
+      description: opts[:description],
+      priority: opts[:priority],
+      points: opts[:points],
+      status: opts[:status],
+      type: opts[:type],
+      labels: opts[:labels]
+    }
+    |> Enum.reject(fn {_k, v} -> is_nil(v) end)
+    |> Map.new()
+  end
+
+  defp print_edit_usage do
+    print_error("No changes specified")
+
+    IO.puts(~S"""
+
+    Usage:
+      albedo tickets edit <id> --title "New title"
+      albedo tickets edit <id> --description "New description"
+      albedo tickets edit <id> --priority high --points 5
+      albedo tickets edit <id> --status in_progress
+      albedo tickets edit <id> --type bugfix --labels "tag1,tag2"
+
+    Options:
+      --title, -t       Update ticket title
+      --description, -d Update ticket description
+      --priority, -p    Priority: urgent, high, medium, low, none
+      --points          Story points (1, 2, 3, 5, 8, 13)
+      --status          Status: pending, in_progress, completed
+      --type            Type: feature, bugfix, chore, docs, test
+      --labels          Comma-separated labels
+    """)
+  end
+
+  defp print_edit_success(id, ticket, changes) do
+    changes_str =
+      [
+        if(changes[:title], do: "title=\"#{ticket.title}\""),
+        if(changes[:description], do: "description updated"),
+        if(changes[:priority], do: "priority=#{ticket.priority}"),
+        if(changes[:points], do: "points=#{ticket.estimate}"),
+        if(changes[:status], do: "status=#{ticket.status}"),
+        if(changes[:type], do: "type=#{ticket.type}"),
+        if(changes[:labels], do: "labels=#{Enum.join(ticket.labels, ",")}")
+      ]
+      |> Enum.reject(&is_nil/1)
+      |> Enum.join(", ")
+
+    print_success("Ticket ##{id} updated: #{changes_str}")
   end
 
   defp export_tickets(opts) do

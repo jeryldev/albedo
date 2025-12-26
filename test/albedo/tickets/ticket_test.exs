@@ -153,6 +153,186 @@ defmodule Albedo.Tickets.TicketTest do
     end
   end
 
+  describe "edit/2" do
+    @describetag :edit
+
+    setup do
+      ticket =
+        Ticket.new(%{
+          id: "1",
+          title: "Original title",
+          description: "Original description",
+          priority: :medium,
+          estimate: 3,
+          type: :feature,
+          labels: ["backend"]
+        })
+
+      {:ok, ticket: ticket}
+    end
+
+    test "given ticket, when editing title, then updates title only", %{ticket: ticket} do
+      updated = Ticket.edit(ticket, %{title: "New title"})
+
+      assert updated.title == "New title"
+      assert updated.description == "Original description"
+      assert updated.priority == :medium
+    end
+
+    test "given ticket, when editing with empty title, then keeps original title", %{
+      ticket: ticket
+    } do
+      updated = Ticket.edit(ticket, %{title: ""})
+
+      assert updated.title == "Original title"
+    end
+
+    test "given ticket, when editing description, then updates description only", %{
+      ticket: ticket
+    } do
+      updated = Ticket.edit(ticket, %{description: "New description"})
+
+      assert updated.description == "New description"
+      assert updated.title == "Original title"
+    end
+
+    test "given ticket, when editing priority with atom, then updates priority", %{
+      ticket: ticket
+    } do
+      updated = Ticket.edit(ticket, %{priority: :high})
+
+      assert updated.priority == :high
+    end
+
+    test "given ticket, when editing priority with string, then parses and updates", %{
+      ticket: ticket
+    } do
+      updated = Ticket.edit(ticket, %{priority: "urgent"})
+
+      assert updated.priority == :urgent
+    end
+
+    test "given ticket, when editing with invalid priority, then keeps original", %{
+      ticket: ticket
+    } do
+      updated = Ticket.edit(ticket, %{priority: "invalid"})
+
+      assert updated.priority == :medium
+    end
+
+    test "given ticket, when editing points, then updates estimate", %{ticket: ticket} do
+      updated = Ticket.edit(ticket, %{points: 8})
+
+      assert updated.estimate == 8
+    end
+
+    test "given ticket, when editing with invalid points, then keeps original", %{
+      ticket: ticket
+    } do
+      updated = Ticket.edit(ticket, %{points: -1})
+
+      assert updated.estimate == 3
+    end
+
+    test "given ticket, when editing status with atom, then updates status", %{ticket: ticket} do
+      updated = Ticket.edit(ticket, %{status: :in_progress})
+
+      assert updated.status == :in_progress
+    end
+
+    test "given ticket, when editing status with string, then parses and updates", %{
+      ticket: ticket
+    } do
+      updated = Ticket.edit(ticket, %{status: "completed"})
+
+      assert updated.status == :completed
+    end
+
+    test "given ticket, when editing with invalid status, then keeps original", %{
+      ticket: ticket
+    } do
+      updated = Ticket.edit(ticket, %{status: "invalid"})
+
+      assert updated.status == :pending
+    end
+
+    test "given ticket, when editing type with atom, then updates type", %{ticket: ticket} do
+      updated = Ticket.edit(ticket, %{type: :bugfix})
+
+      assert updated.type == :bugfix
+    end
+
+    test "given ticket, when editing type with string, then parses and updates", %{
+      ticket: ticket
+    } do
+      updated = Ticket.edit(ticket, %{type: "chore"})
+
+      assert updated.type == :chore
+    end
+
+    test "given ticket, when editing with invalid type, then keeps original", %{ticket: ticket} do
+      updated = Ticket.edit(ticket, %{type: "invalid"})
+
+      assert updated.type == :feature
+    end
+
+    test "given ticket, when editing labels with string, then parses to list", %{ticket: ticket} do
+      updated = Ticket.edit(ticket, %{labels: "frontend,api"})
+
+      assert updated.labels == ["frontend", "api"]
+    end
+
+    test "given ticket, when editing labels with list, then updates labels", %{ticket: ticket} do
+      updated = Ticket.edit(ticket, %{labels: ["new", "labels"]})
+
+      assert updated.labels == ["new", "labels"]
+    end
+
+    test "given ticket, when editing multiple fields, then updates all fields", %{ticket: ticket} do
+      updated =
+        Ticket.edit(ticket, %{
+          title: "Updated title",
+          description: "Updated description",
+          priority: :high,
+          points: 5,
+          status: :in_progress,
+          type: :bugfix,
+          labels: ["urgent"]
+        })
+
+      assert updated.title == "Updated title"
+      assert updated.description == "Updated description"
+      assert updated.priority == :high
+      assert updated.estimate == 5
+      assert updated.status == :in_progress
+      assert updated.type == :bugfix
+      assert updated.labels == ["urgent"]
+    end
+
+    test "given ticket, when editing with all nil values, then returns unchanged ticket", %{
+      ticket: ticket
+    } do
+      updated =
+        Ticket.edit(ticket, %{
+          title: nil,
+          description: nil,
+          priority: nil,
+          points: nil,
+          status: nil,
+          type: nil,
+          labels: nil
+        })
+
+      assert updated.title == ticket.title
+      assert updated.description == ticket.description
+      assert updated.priority == ticket.priority
+      assert updated.estimate == ticket.estimate
+      assert updated.status == ticket.status
+      assert updated.type == ticket.type
+      assert updated.labels == ticket.labels
+    end
+  end
+
   describe "statuses/0, types/0, priorities/0" do
     test "returns valid status list" do
       assert :pending in Ticket.statuses()
