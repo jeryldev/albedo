@@ -96,15 +96,4 @@ defmodule Albedo.LLM.Claude do
         {:error, {:unexpected_response, body}}
     end
   end
-
-  @doc """
-  Check if the API key is valid by making a simple request.
-  """
-  def validate_api_key(api_key) do
-    case chat("Say 'ok'", api_key: api_key, max_tokens: 10) do
-      {:ok, _} -> :ok
-      {:error, :invalid_api_key} -> {:error, :invalid}
-      {:error, reason} -> {:error, reason}
-    end
-  end
 end

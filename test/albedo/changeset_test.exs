@@ -211,33 +211,6 @@ defmodule Albedo.ChangesetTest do
     end
   end
 
-  describe "validate_inclusion/3" do
-    test "passes when value is in allowed list" do
-      changeset =
-        Changeset.cast({%{status: nil}, @types}, %{status: :active}, [:status])
-        |> Changeset.validate_inclusion(:status, [:pending, :active])
-
-      assert changeset.valid?
-    end
-
-    test "fails when value is not in allowed list" do
-      changeset =
-        Changeset.cast({%{status: nil}, @types}, %{status: :inactive}, [:status])
-        |> Changeset.validate_inclusion(:status, [:pending, :active])
-
-      assert not changeset.valid?
-      assert {:status, {"is invalid", []}} in changeset.errors
-    end
-
-    test "passes when value is nil" do
-      changeset =
-        Changeset.cast({%{status: nil}, @types}, %{}, [:status])
-        |> Changeset.validate_inclusion(:status, [:pending, :active])
-
-      assert changeset.valid?
-    end
-  end
-
   describe "get_field/2" do
     test "returns changed value when field is changed" do
       changeset = Changeset.cast({%{name: "Original"}, @types}, %{name: "Updated"}, [:name])
@@ -319,19 +292,6 @@ defmodule Albedo.ChangesetTest do
         |> Changeset.validate_required([:name])
 
       assert {:error, %Changeset{valid?: false}} = Changeset.apply_action(changeset, :insert)
-    end
-  end
-
-  describe "error_messages/1" do
-    test "returns flat list of error messages" do
-      changeset =
-        Changeset.cast({%{name: nil, age: nil}, @types}, %{age: "abc"}, [:name, :age])
-        |> Changeset.validate_required([:name])
-
-      messages = Changeset.error_messages(changeset)
-
-      assert "age is not a valid integer" in messages
-      assert "name can't be blank" in messages
     end
   end
 end

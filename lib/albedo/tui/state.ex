@@ -251,18 +251,6 @@ defmodule Albedo.TUI.State do
     Enum.at(files, idx)
   end
 
-  def visible_tickets(%__MODULE__{data: nil}), do: []
-
-  def visible_tickets(%__MODULE__{data: data}) do
-    data.tickets
-    |> Enum.with_index()
-  end
-
-  def visible_research_files(%__MODULE__{research_files: files}) do
-    files
-    |> Enum.with_index()
-  end
-
   def move_up(%__MODULE__{active_panel: :projects} = state) do
     new_idx = max(0, state.current_project - 1)
     %{state | current_project: new_idx}
@@ -353,25 +341,12 @@ defmodule Albedo.TUI.State do
     %{state | active_panel: :research}
   end
 
-  def scroll_detail_up(%__MODULE__{} = state) do
-    new_scroll = max(0, state.detail_scroll - 1)
-    %{state | detail_scroll: new_scroll}
-  end
-
-  def scroll_detail_down(%__MODULE__{} = state) do
-    %{state | detail_scroll: state.detail_scroll + 1}
-  end
-
   def reset_detail_scroll(%__MODULE__{} = state) do
     %{state | detail_scroll: 0}
   end
 
   def set_message(%__MODULE__{} = state, message) do
     %{state | message: message}
-  end
-
-  def clear_message(%__MODULE__{} = state) do
-    %{state | message: nil}
   end
 
   def quit(%__MODULE__{} = state) do
@@ -621,30 +596,6 @@ defmodule Albedo.TUI.State do
       name_buffer: "",
       task_buffer: "",
       active_field: :name,
-      cursor: 0,
-      logs: [],
-      result: nil
-    }
-
-    %{
-      state
-      | mode: :modal,
-        modal: type,
-        modal_data: modal_data,
-        modal_scroll: 0,
-        modal_task_ref: nil
-    }
-  end
-
-  def enter_modal_with_path(%__MODULE__{} = state, type, path) do
-    modal_data = %{
-      type: type,
-      phase: :input,
-      name: path,
-      task: "",
-      name_buffer: path,
-      task_buffer: "",
-      active_field: :task,
       cursor: 0,
       logs: [],
       result: nil

@@ -105,26 +105,4 @@ defmodule Albedo.Agents.Base do
     #{data_rows}
     """
   end
-
-  @doc """
-  Helper to build code blocks.
-  """
-  def code_block(content, language \\ "elixir") do
-    """
-    ```#{language}
-    #{content}
-    ```
-    """
-  end
-
-  @doc """
-  Helper to format a mermaid diagram.
-  """
-  def mermaid_diagram(content) do
-    """
-    ```mermaid
-    #{content}
-    ```
-    """
-  end
 end

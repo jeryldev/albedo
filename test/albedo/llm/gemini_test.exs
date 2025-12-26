@@ -28,12 +28,6 @@ defmodule Albedo.LLM.GeminiTest do
     end
   end
 
-  describe "validate_api_key/1" do
-    test "returns error for nil key" do
-      assert {:error, :missing_api_key} = Gemini.validate_api_key(nil)
-    end
-  end
-
   describe "response parsing" do
     test "handles standard response structure" do
       response = %{

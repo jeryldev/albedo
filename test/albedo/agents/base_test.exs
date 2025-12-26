@@ -53,45 +53,4 @@ defmodule Albedo.Agents.BaseTest do
       assert result =~ "| --- | --- |"
     end
   end
-
-  describe "code_block/2" do
-    test "creates code block with default language" do
-      result = Base.code_block("def hello, do: :world")
-      assert result =~ "```elixir"
-      assert result =~ "def hello, do: :world"
-      assert result =~ "```"
-    end
-
-    test "creates code block with custom language" do
-      result = Base.code_block("console.log('hello')", "javascript")
-      assert result =~ "```javascript"
-      assert result =~ "console.log('hello')"
-    end
-
-    test "handles multiline code" do
-      code = """
-      defmodule Test do
-        def hello do
-          :world
-        end
-      end
-      """
-
-      result = Base.code_block(code)
-      assert result =~ "defmodule Test do"
-      assert result =~ ":world"
-    end
-  end
-
-  describe "mermaid_diagram/1" do
-    test "creates mermaid diagram block" do
-      diagram = "graph TD\n  A --> B"
-      result = Base.mermaid_diagram(diagram)
-
-      assert result =~ "```mermaid"
-      assert result =~ "graph TD"
-      assert result =~ "A --> B"
-      assert result =~ "```"
-    end
-  end
 end

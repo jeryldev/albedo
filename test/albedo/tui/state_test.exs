@@ -170,15 +170,12 @@ defmodule Albedo.TUI.StateTest do
     end
   end
 
-  describe "set_message/2 and clear_message/1" do
-    test "sets and clears message" do
+  describe "set_message/2" do
+    test "sets message" do
       state = State.new()
 
       state = State.set_message(state, "Hello")
       assert state.message == "Hello"
-
-      state = State.clear_message(state)
-      assert state.message == nil
     end
   end
 
@@ -209,52 +206,7 @@ defmodule Albedo.TUI.StateTest do
     end
   end
 
-  describe "visible_tickets/1" do
-    test "returns empty list when no data" do
-      state = State.new()
-
-      assert State.visible_tickets(state) == []
-    end
-
-    test "returns tickets with indices when data exists" do
-      ticket1 = build_ticket("1")
-      ticket2 = build_ticket("2")
-      data = build_tickets_data([ticket1, ticket2])
-      state = %State{State.new() | data: data}
-
-      result = State.visible_tickets(state)
-
-      assert length(result) == 2
-      assert {^ticket1, 0} = Enum.at(result, 0)
-      assert {^ticket2, 1} = Enum.at(result, 1)
-    end
-  end
-
   describe "scroll functions" do
-    test "scroll_detail_up decrements detail_scroll" do
-      state = %State{State.new() | detail_scroll: 5}
-
-      result = State.scroll_detail_up(state)
-
-      assert result.detail_scroll == 4
-    end
-
-    test "scroll_detail_up does not go below 0" do
-      state = %State{State.new() | detail_scroll: 0}
-
-      result = State.scroll_detail_up(state)
-
-      assert result.detail_scroll == 0
-    end
-
-    test "scroll_detail_down increments detail_scroll" do
-      state = %State{State.new() | detail_scroll: 0}
-
-      result = State.scroll_detail_down(state)
-
-      assert result.detail_scroll == 1
-    end
-
     test "reset_detail_scroll sets detail_scroll to 0" do
       state = %State{State.new() | detail_scroll: 10}
 

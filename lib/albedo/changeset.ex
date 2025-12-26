@@ -97,42 +97,6 @@ defmodule Albedo.Changeset do
   end
 
   @doc """
-  Validates that a field's value is included in the given list.
-  """
-  def validate_inclusion(%__MODULE__{} = changeset, field, values) do
-    value = get_field(changeset, field)
-
-    cond do
-      is_nil(value) ->
-        changeset
-
-      value in values ->
-        changeset
-
-      true ->
-        add_error(changeset, field, "is invalid")
-    end
-  end
-
-  @doc """
-  Validates a field with a custom function.
-  The function receives the changeset and field, and should return the changeset.
-  """
-  def validate_change(%__MODULE__{} = changeset, field, validator)
-      when is_function(validator, 2) do
-    value = get_change(changeset, field)
-
-    if is_nil(value) do
-      changeset
-    else
-      case validator.(field, value) do
-        [] -> changeset
-        errors when is_list(errors) -> Enum.reduce(errors, changeset, &add_error(&2, field, &1))
-      end
-    end
-  end
-
-  @doc """
   Adds an error to the changeset.
   """
   def add_error(%__MODULE__{} = changeset, field, message, keys \\ []) do
@@ -180,24 +144,6 @@ defmodule Albedo.Changeset do
 
   def apply_action(%__MODULE__{valid?: false} = changeset, _action) do
     {:error, changeset}
-  end
-
-  @doc """
-  Formats errors as a keyword list of {field, messages}.
-  """
-  def format_errors(%__MODULE__{errors: errors}) do
-    errors
-    |> Enum.group_by(fn {field, _} -> field end, fn {_, {msg, _}} -> msg end)
-    |> Enum.into([])
-  end
-
-  @doc """
-  Returns a flat list of error messages.
-  """
-  def error_messages(%__MODULE__{errors: errors}) do
-    Enum.map(errors, fn {field, {message, _}} ->
-      "#{field} #{message}"
-    end)
   end
 
   defp normalize_params(params) when is_map(params), do: params

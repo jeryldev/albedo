@@ -33,20 +33,6 @@ defmodule Albedo.TUI.Terminal do
   def restore_mode(_), do: :ok
 
   @doc """
-  Clears the screen and moves cursor to home position.
-  """
-  def clear_screen do
-    IO.write("\e[2J\e[H")
-  end
-
-  @doc """
-  Moves cursor to the specified position (1-indexed).
-  """
-  def move_cursor(row, col) do
-    IO.write("\e[#{row};#{col}H")
-  end
-
-  @doc """
   Hides the cursor.
   """
   def hide_cursor do
@@ -100,15 +86,6 @@ defmodule Albedo.TUI.Terminal do
       "\e" -> read_escape_sequence()
       char -> parse_char(char)
     end
-  end
-
-  @doc """
-  Flushes any pending input by waiting for the buffer to settle.
-  Call this after a blocking operation to clear stale keypresses.
-  """
-  def flush_input do
-    Process.sleep(150)
-    :ok
   end
 
   defp read_escape_sequence do
