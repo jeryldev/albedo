@@ -1,6 +1,7 @@
 defmodule Albedo.Agents.TechStackTest do
   use ExUnit.Case, async: true
 
+  alias Albedo.Search.PatternMatcher
   alias Albedo.TestSupport.Mocks
 
   describe "mix project detection" do
@@ -162,7 +163,7 @@ defmodule Albedo.Agents.TechStackTest do
     |> Enum.find(&mix_project_content?/1)
     |> case do
       nil -> []
-      content -> Albedo.Search.PatternMatcher.extract_mix_deps(content)
+      content -> PatternMatcher.extract_mix_deps(content)
     end
   end
 end

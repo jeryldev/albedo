@@ -7,11 +7,11 @@ defmodule Albedo.TUI.State do
   alias Albedo.Tickets
 
   defstruct [
-    :session_dir,
+    :project_dir,
     :data,
-    :sessions,
-    :sessions_dir,
-    :current_session,
+    :projects,
+    :projects_dir,
+    :current_project,
     :selected_ticket,
     :active_panel,
     :panel_scroll,
@@ -32,19 +32,19 @@ defmodule Albedo.TUI.State do
     :confirm_message
   ]
 
-  @type panel :: :sessions | :tickets | :detail
+  @type panel :: :projects | :tickets | :detail
   @type mode :: :normal | :command | :confirm | :edit | :input
 
   @editable_fields [:title, :description, :type, :priority, :estimate, :labels]
 
   @type t :: %__MODULE__{
-          session_dir: String.t() | nil,
+          project_dir: String.t() | nil,
           data: Tickets.Data.t() | nil,
-          sessions: [map()],
-          current_session: non_neg_integer(),
+          projects: [map()],
+          current_project: non_neg_integer(),
           selected_ticket: non_neg_integer(),
           active_panel: panel(),
-          panel_scroll: %{sessions: non_neg_integer(), tickets: non_neg_integer()},
+          panel_scroll: %{projects: non_neg_integer(), tickets: non_neg_integer()},
           terminal_size: {non_neg_integer(), non_neg_integer()},
           mode: mode(),
           message: String.t() | nil,
@@ -63,14 +63,14 @@ defmodule Albedo.TUI.State do
 
   def new(opts \\ []) do
     %__MODULE__{
-      session_dir: opts[:session_dir],
+      project_dir: opts[:project_dir],
       data: nil,
-      sessions: [],
-      sessions_dir: nil,
-      current_session: 0,
+      projects: [],
+      projects_dir: nil,
+      current_project: 0,
       selected_ticket: 0,
-      active_panel: :sessions,
-      panel_scroll: %{sessions: 0, tickets: 0},
+      active_panel: :projects,
+      panel_scroll: %{projects: 0, tickets: 0},
       detail_scroll: 0,
       terminal_size: {80, 24},
       mode: :normal,
@@ -91,38 +91,41 @@ defmodule Albedo.TUI.State do
 
   def editable_fields, do: @editable_fields
 
-  def load_sessions(%__MODULE__{} = state, sessions_dir) do
-    sessions =
-      case File.ls(sessions_dir) do
+  def load_projects(%__MODULE__{} = state, projects_dir) do
+    projects =
+      case File.ls(projects_dir) do
         {:ok, dirs} ->
           dirs
           |> Enum.reject(&String.starts_with?(&1, "."))
-          |> Enum.filter(&has_session_file?(sessions_dir, &1))
+          |> Enum.filter(&has_project_file?(projects_dir, &1))
           |> Enum.sort(:desc)
           |> Enum.take(50)
           |> Enum.with_index()
           |> Enum.map(fn {dir, idx} ->
-            session_file = Path.join([sessions_dir, dir, "session.json"])
-            load_session_info(dir, session_file, idx)
+            load_project_info(projects_dir, dir, idx)
           end)
 
         {:error, _} ->
           []
       end
 
-    %{state | sessions: sessions, sessions_dir: sessions_dir}
+    %{state | projects: projects, projects_dir: projects_dir}
   end
 
-  defp has_session_file?(sessions_dir, dir) do
-    session_file = Path.join([sessions_dir, dir, "session.json"])
-    File.exists?(session_file)
+  defp has_project_file?(projects_dir, dir) do
+    project_file = Path.join([projects_dir, dir, "project.json"])
+    legacy_file = Path.join([projects_dir, dir, "session.json"])
+    File.exists?(project_file) or File.exists?(legacy_file)
   end
 
-  defp load_session_info(id, session_file, index) do
+  defp load_project_info(projects_dir, id, index) do
+    project_file = Path.join([projects_dir, id, "project.json"])
+    legacy_file = Path.join([projects_dir, id, "session.json"])
+    file_to_load = if File.exists?(project_file), do: project_file, else: legacy_file
     base = %{id: id, index: index, state: "unknown", task: ""}
 
-    with true <- File.exists?(session_file),
-         {:ok, content} <- File.read(session_file),
+    with true <- File.exists?(file_to_load),
+         {:ok, content} <- File.read(file_to_load),
          {:ok, data} <- Jason.decode(content) do
       %{
         base
@@ -134,18 +137,18 @@ defmodule Albedo.TUI.State do
     end
   end
 
-  def load_tickets(%__MODULE__{} = state, session_dir) do
-    case Tickets.load(session_dir) do
+  def load_tickets(%__MODULE__{} = state, project_dir) do
+    case Tickets.load(project_dir) do
       {:ok, data} ->
-        {:ok, %{state | data: data, session_dir: session_dir, selected_ticket: 0}}
+        {:ok, %{state | data: data, project_dir: project_dir, selected_ticket: 0}}
 
       {:error, reason} ->
         {:error, reason}
     end
   end
 
-  def current_session(%__MODULE__{sessions: sessions, current_session: idx}) do
-    Enum.at(sessions, idx)
+  def current_project(%__MODULE__{projects: projects, current_project: idx}) do
+    Enum.at(projects, idx)
   end
 
   def current_ticket(%__MODULE__{data: nil}), do: nil
@@ -161,9 +164,9 @@ defmodule Albedo.TUI.State do
     |> Enum.with_index()
   end
 
-  def move_up(%__MODULE__{active_panel: :sessions} = state) do
-    new_idx = max(0, state.current_session - 1)
-    %{state | current_session: new_idx}
+  def move_up(%__MODULE__{active_panel: :projects} = state) do
+    new_idx = max(0, state.current_project - 1)
+    %{state | current_project: new_idx}
   end
 
   def move_up(%__MODULE__{active_panel: :tickets, data: nil} = state), do: state
@@ -178,10 +181,10 @@ defmodule Albedo.TUI.State do
     %{state | detail_scroll: new_scroll}
   end
 
-  def move_down(%__MODULE__{active_panel: :sessions, sessions: sessions} = state) do
-    max_idx = max(0, length(sessions) - 1)
-    new_idx = min(max_idx, state.current_session + 1)
-    %{state | current_session: new_idx}
+  def move_down(%__MODULE__{active_panel: :projects, projects: projects} = state) do
+    max_idx = max(0, length(projects) - 1)
+    new_idx = min(max_idx, state.current_project + 1)
+    %{state | current_project: new_idx}
   end
 
   def move_down(%__MODULE__{active_panel: :tickets, data: nil} = state), do: state
@@ -196,7 +199,7 @@ defmodule Albedo.TUI.State do
     %{state | detail_scroll: state.detail_scroll + 1}
   end
 
-  def next_panel(%__MODULE__{active_panel: :sessions} = state) do
+  def next_panel(%__MODULE__{active_panel: :projects} = state) do
     %{state | active_panel: :tickets}
   end
 
@@ -205,15 +208,15 @@ defmodule Albedo.TUI.State do
   end
 
   def next_panel(%__MODULE__{active_panel: :detail} = state) do
-    %{state | active_panel: :sessions}
+    %{state | active_panel: :projects}
   end
 
-  def prev_panel(%__MODULE__{active_panel: :sessions} = state) do
+  def prev_panel(%__MODULE__{active_panel: :projects} = state) do
     %{state | active_panel: :detail}
   end
 
   def prev_panel(%__MODULE__{active_panel: :tickets} = state) do
-    %{state | active_panel: :sessions}
+    %{state | active_panel: :projects}
   end
 
   def prev_panel(%__MODULE__{active_panel: :detail} = state) do
@@ -455,18 +458,18 @@ defmodule Albedo.TUI.State do
     }
   end
 
-  def delete_session(%__MODULE__{sessions: sessions, current_session: idx} = state) do
-    updated_sessions = List.delete_at(sessions, idx)
-    new_idx = min(idx, max(0, length(updated_sessions) - 1))
-    %{state | sessions: updated_sessions, current_session: new_idx}
+  def delete_project(%__MODULE__{projects: projects, current_project: idx} = state) do
+    updated_projects = List.delete_at(projects, idx)
+    new_idx = min(idx, max(0, length(updated_projects) - 1))
+    %{state | projects: updated_projects, current_project: new_idx}
   end
 
-  def update_session_task(%__MODULE__{sessions: sessions, current_session: idx} = state, new_task) do
-    updated_sessions =
-      List.update_at(sessions, idx, fn session ->
-        %{session | task: String.slice(new_task, 0, 50)}
+  def update_project_task(%__MODULE__{projects: projects, current_project: idx} = state, new_task) do
+    updated_projects =
+      List.update_at(projects, idx, fn project ->
+        %{project | task: String.slice(new_task, 0, 50)}
       end)
 
-    %{state | sessions: updated_sessions}
+    %{state | projects: updated_projects}
   end
 end

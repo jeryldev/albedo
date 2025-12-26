@@ -1,12 +1,12 @@
-defmodule Albedo.Test.SessionHelpers do
+defmodule Albedo.Test.ProjectHelpers do
   @moduledoc """
-  Test helpers for session management.
+  Test helpers for project management.
   """
 
   @doc """
-  Create a temporary session directory.
+  Create a temporary project directory.
   """
-  def tmp_session_dir do
+  def tmp_project_dir do
     id = :rand.uniform(999_999)
     dir = Path.join(System.tmp_dir!(), "albedo_test_#{id}")
     File.mkdir_p!(dir)
@@ -14,20 +14,20 @@ defmodule Albedo.Test.SessionHelpers do
   end
 
   @doc """
-  Create a mock session state.
+  Create a mock project state.
   """
-  def mock_session_state(opts \\ []) do
+  def mock_project_state(opts \\ []) do
     now = DateTime.utc_now()
     merged = merge_with_defaults(opts)
 
-    %Albedo.Session.State{
+    %Albedo.Project.State{
       id: merged.id,
       codebase_path: merged.codebase_path,
       task: merged.task,
       state: merged.state,
       created_at: now,
       updated_at: now,
-      session_dir: merged.session_dir,
+      project_dir: merged.project_dir,
       config: merged.config,
       phases: init_phases(opts[:phases] || %{}),
       context: merged.context,
@@ -38,11 +38,11 @@ defmodule Albedo.Test.SessionHelpers do
 
   defp merge_with_defaults(opts) do
     %{
-      id: Keyword.get(opts, :id, "test-session-#{:rand.uniform(999)}"),
+      id: Keyword.get(opts, :id, "test-project-#{:rand.uniform(999)}"),
       codebase_path: Keyword.get(opts, :codebase_path, "/tmp/test_codebase"),
       task: Keyword.get(opts, :task, "Test task description"),
       state: Keyword.get(opts, :state, :created),
-      session_dir: Keyword.get(opts, :session_dir, tmp_session_dir()),
+      project_dir: Keyword.get(opts, :project_dir, tmp_project_dir()),
       config: Keyword.get(opts, :config, %{}),
       context: Keyword.get(opts, :context, %{}),
       clarifying_questions: Keyword.get(opts, :clarifying_questions, [])

@@ -181,10 +181,12 @@ Summary:
 | `albedo config [subcommand]` | Manage configuration (show, set-provider, set-key) |
 | `albedo tickets` | List tickets from the latest session |
 | `albedo tickets show <id>` | Show detailed ticket information |
+| `albedo tickets add "title"` | Add a new ticket |
 | `albedo tickets start <id>` | Mark a ticket as in-progress |
 | `albedo tickets done <id> [id...]` | Mark ticket(s) as completed |
 | `albedo tickets reset [--all]` | Reset ticket status to pending |
-| `albedo tickets edit <id>` | Edit ticket priority/points |
+| `albedo tickets edit <id>` | Edit ticket properties (title, description, priority, points, status, type, labels) |
+| `albedo tickets delete <id> [--yes]` | Delete a ticket (with confirmation) |
 | `albedo tickets export [--format]` | Export tickets (json, csv, markdown, github) |
 
 ### Options
@@ -233,16 +235,28 @@ albedo tickets --status completed
 # View ticket details
 albedo tickets show 1
 
+# Add new tickets
+albedo tickets add "Implement user login"
+albedo tickets add "Add tests" --priority high --points 3
+albedo tickets add "Bug fix" --type bugfix --labels "urgent,backend"
+
 # Update ticket status
 albedo tickets start 1        # Mark as in-progress
 albedo tickets done 1 2 3     # Mark multiple as completed
 albedo tickets reset 1        # Reset to pending
 albedo tickets reset --all    # Reset all tickets
 
-# Edit ticket priority and points
-albedo tickets edit 1 --priority high   # Change priority
-albedo tickets edit 1 --points 5        # Change story points
-albedo tickets edit 1 -p medium --points 3  # Both at once
+# Edit ticket properties
+albedo tickets edit 1 --title "New title"
+albedo tickets edit 1 --description "Updated description"
+albedo tickets edit 1 --priority high --points 5
+albedo tickets edit 1 --status in_progress
+albedo tickets edit 1 --type bugfix --labels "tag1,tag2"
+
+# Delete tickets
+albedo tickets delete 1            # Delete with confirmation
+albedo tickets delete 1 --yes      # Delete without confirmation
+albedo tickets delete 1 2 3        # Delete multiple tickets
 
 # Export tickets
 albedo tickets export                          # JSON to stdout

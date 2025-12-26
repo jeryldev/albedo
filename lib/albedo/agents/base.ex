@@ -15,7 +15,7 @@ defmodule Albedo.Agents.Base do
       require Logger
 
       alias Albedo.LLM.Client, as: LLM
-      alias Albedo.Session.Registry
+      alias Albedo.Project.Registry
 
       def start_link(opts) do
         GenServer.start_link(__MODULE__, opts)
@@ -24,8 +24,8 @@ defmodule Albedo.Agents.Base do
       @impl GenServer
       def init(opts) do
         state = %{
-          session_id: opts[:session_id],
-          session_dir: opts[:session_dir],
+          project_id: opts[:project_id],
+          project_dir: opts[:project_dir],
           codebase_path: opts[:codebase_path],
           task: opts[:task],
           phase: opts[:phase],
@@ -44,30 +44,30 @@ defmodule Albedo.Agents.Base do
         case investigate(state) do
           {:ok, findings} ->
             output = format_output(findings)
-            save_output(state.session_dir, state.output_file, output)
-            notify_session(state.session_id, state.phase, findings)
+            save_output(state.project_dir, state.output_file, output)
+            notify_project(state.project_id, state.phase, findings)
             {:stop, :normal, state}
 
           {:error, reason} ->
             Logger.error("Agent #{__MODULE__} failed: #{inspect(reason)}")
-            notify_session_failed(state.session_id, state.phase, reason)
+            notify_project_failed(state.project_id, state.phase, reason)
             {:stop, :normal, state}
         end
       end
 
-      defp save_output(session_dir, output_file, content) do
-        File.mkdir_p!(session_dir)
-        path = Path.join(session_dir, output_file)
+      defp save_output(project_dir, output_file, content) do
+        File.mkdir_p!(project_dir)
+        path = Path.join(project_dir, output_file)
         File.write!(path, content)
         Logger.info("Saved output to #{path}")
       end
 
-      defp notify_session(session_id, phase, findings) do
-        Registry.notify_agent_complete(session_id, phase, findings)
+      defp notify_project(project_id, phase, findings) do
+        Registry.notify_agent_complete(project_id, phase, findings)
       end
 
-      defp notify_session_failed(session_id, phase, reason) do
-        Registry.notify_agent_failed(session_id, phase, reason)
+      defp notify_project_failed(project_id, phase, reason) do
+        Registry.notify_agent_failed(project_id, phase, reason)
       end
 
       defp call_llm(prompt, opts \\ []) do

@@ -16,17 +16,17 @@ defmodule Albedo.TUI.RendererTest do
       assert output =~ "Albedo TUI"
     end
 
-    test "renders with sessions panel active" do
-      sessions = [
-        %{id: "test-session-1", state: "completed", task: "First task"},
-        %{id: "test-session-2", state: "planning", task: "Second task"}
+    test "renders with projects panel active" do
+      projects = [
+        %{id: "test-project-1", state: "completed", task: "First task"},
+        %{id: "test-project-2", state: "planning", task: "Second task"}
       ]
 
-      state = %State{State.new() | sessions: sessions, active_panel: :sessions}
+      state = %State{State.new() | projects: projects, active_panel: :projects}
 
       output = capture_io(fn -> Renderer.render(state) end)
 
-      assert output =~ "Sessions"
+      assert output =~ "Projects"
       assert output =~ "Tickets"
     end
 
@@ -87,7 +87,7 @@ defmodule Albedo.TUI.RendererTest do
     end
 
     test "renders in input mode" do
-      state = State.enter_input_mode(State.new(), :new_session, "Enter task: ")
+      state = State.enter_input_mode(State.new(), :new_project, "Enter task: ")
 
       output = capture_io(fn -> Renderer.render(state) end)
 
@@ -95,15 +95,15 @@ defmodule Albedo.TUI.RendererTest do
     end
 
     test "renders in confirm mode" do
-      state = State.enter_confirm_mode(State.new(), :delete_session, "Delete session? (y/n)")
+      state = State.enter_confirm_mode(State.new(), :delete_project, "Delete project? (y/n)")
 
       output = capture_io(fn -> Renderer.render(state) end)
 
-      assert output =~ "Delete session?"
+      assert output =~ "Delete project?"
     end
 
-    test "renders help text for sessions panel" do
-      state = %State{State.new() | active_panel: :sessions}
+    test "renders help text for projects panel" do
+      state = %State{State.new() | active_panel: :projects}
 
       output = capture_io(fn -> Renderer.render(state) end)
 
@@ -127,15 +127,15 @@ defmodule Albedo.TUI.RendererTest do
       assert output =~ "scroll"
     end
 
-    test "renders session with different states" do
-      sessions = [
-        %{id: "completed-session", state: "completed", task: "Done"},
-        %{id: "failed-session", state: "failed", task: "Error"},
-        %{id: "paused-session", state: "paused", task: "Waiting"},
-        %{id: "planning-session", state: "planning", task: "Active"}
+    test "renders project with different states" do
+      projects = [
+        %{id: "completed-project", state: "completed", task: "Done"},
+        %{id: "failed-project", state: "failed", task: "Error"},
+        %{id: "paused-project", state: "paused", task: "Waiting"},
+        %{id: "planning-project", state: "planning", task: "Active"}
       ]
 
-      state = %State{State.new() | sessions: sessions, active_panel: :sessions}
+      state = %State{State.new() | projects: projects, active_panel: :projects}
 
       output = capture_io(fn -> Renderer.render(state) end)
 
@@ -258,7 +258,7 @@ defmodule Albedo.TUI.RendererTest do
 
   defp build_tickets_data(tickets) do
     %{
-      session_id: "test-session",
+      project_id: "test-project",
       task_description: "Test task",
       tickets: tickets,
       summary: %{

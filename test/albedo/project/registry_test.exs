@@ -1,7 +1,7 @@
-defmodule Albedo.Session.RegistryTest do
+defmodule Albedo.Project.RegistryTest do
   use ExUnit.Case, async: false
 
-  alias Albedo.Session.Registry
+  alias Albedo.Project.Registry
 
   describe "registry behavior" do
     test "registry is running" do
@@ -10,35 +10,35 @@ defmodule Albedo.Session.RegistryTest do
   end
 
   describe "registration and lookup" do
-    test "lookup returns not_found for unregistered session" do
-      assert Registry.lookup("nonexistent-session") == {:error, :not_found}
+    test "lookup returns not_found for unregistered project" do
+      assert Registry.lookup("nonexistent-project") == {:error, :not_found}
     end
 
-    test "get_session_id returns not_found for unregistered pid" do
+    test "get_project_id returns not_found for unregistered pid" do
       pid = spawn(fn -> Process.sleep(100) end)
-      assert Registry.get_session_id(pid) == {:error, :not_found}
+      assert Registry.get_project_id(pid) == {:error, :not_found}
     end
   end
 
   describe "message sending" do
-    test "send_message returns error for unregistered session" do
+    test "send_message returns error for unregistered project" do
       result = Registry.send_message("nonexistent", :test_message)
       assert result == {:error, :not_found}
     end
 
-    test "call returns error for unregistered session" do
+    test "call returns error for unregistered project" do
       result = Registry.call("nonexistent", :test_call, 100)
       assert result == {:error, :not_found}
     end
   end
 
   describe "notification helpers" do
-    test "notify_agent_complete returns error for unregistered session" do
+    test "notify_agent_complete returns error for unregistered project" do
       result = Registry.notify_agent_complete("nonexistent", :domain, %{})
       assert result == {:error, :not_found}
     end
 
-    test "notify_agent_failed returns error for unregistered session" do
+    test "notify_agent_failed returns error for unregistered project" do
       result = Registry.notify_agent_failed("nonexistent", :domain, :timeout)
       assert result == {:error, :not_found}
     end
@@ -67,15 +67,15 @@ defmodule Albedo.Session.RegistryTest do
     end
   end
 
-  describe "session_id extraction" do
+  describe "project_id extraction" do
     test "extracts first key from keys list" do
-      keys = ["session-123", "session-456"]
-      result = extract_session_id(keys)
-      assert result == {:ok, "session-123"}
+      keys = ["project-123", "project-456"]
+      result = extract_project_id(keys)
+      assert result == {:ok, "project-123"}
     end
 
     test "returns not_found for empty keys" do
-      result = extract_session_id([])
+      result = extract_project_id([])
       assert result == {:error, :not_found}
     end
   end
@@ -87,9 +87,9 @@ defmodule Albedo.Session.RegistryTest do
     end
   end
 
-  defp extract_session_id(keys) do
+  defp extract_project_id(keys) do
     case keys do
-      [session_id | _] -> {:ok, session_id}
+      [project_id | _] -> {:ok, project_id}
       [] -> {:error, :not_found}
     end
   end

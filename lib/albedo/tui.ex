@@ -1,12 +1,12 @@
 defmodule Albedo.TUI do
   @moduledoc """
   Terminal User Interface for Albedo.
-  Provides a lazygit-inspired panel-based interface for managing sessions and tickets.
+  Provides a lazygit-inspired panel-based interface for managing projects and tickets.
 
   Uses a pure Elixir approach with raw terminal mode and ANSI escape codes.
   """
 
-  alias Albedo.{Config, Tickets}
+  alias Albedo.{Config, Project, Tickets}
   alias Albedo.TUI.{Renderer, State, Terminal}
 
   @doc """
@@ -14,18 +14,18 @@ defmodule Albedo.TUI do
   """
   def start(opts \\ []) do
     config = Config.load!()
-    sessions_dir = Config.session_dir(config)
+    projects_dir = Config.projects_dir(config)
 
     state =
       State.new(opts)
-      |> State.load_sessions(sessions_dir)
+      |> State.load_projects(projects_dir)
 
     case Terminal.enable_raw_mode() do
       {:ok, old_settings} ->
         try do
           Terminal.enter_alternate_screen()
           Terminal.hide_cursor()
-          run_loop(state, sessions_dir)
+          run_loop(state, projects_dir)
         after
           cleanup(old_settings)
         end
@@ -41,9 +41,9 @@ defmodule Albedo.TUI do
     Terminal.restore_mode(old_settings)
   end
 
-  defp run_loop(%State{quit: true}, _sessions_dir), do: :ok
+  defp run_loop(%State{quit: true}, _projects_dir), do: :ok
 
-  defp run_loop(%State{} = state, sessions_dir) do
+  defp run_loop(%State{} = state, projects_dir) do
     Renderer.render(state)
 
     case Terminal.read_char() do
@@ -55,113 +55,113 @@ defmodule Albedo.TUI do
 
       input ->
         state
-        |> handle_input(input, sessions_dir)
-        |> run_loop(sessions_dir)
+        |> handle_input(input, projects_dir)
+        |> run_loop(projects_dir)
     end
   end
 
-  defp handle_input(%State{mode: :edit} = state, input, sessions_dir) do
-    dispatch_edit_input(state, input, sessions_dir)
+  defp handle_input(%State{mode: :edit} = state, input, projects_dir) do
+    dispatch_edit_input(state, input, projects_dir)
   end
 
-  defp handle_input(%State{mode: :input} = state, input, sessions_dir) do
-    dispatch_input_mode(state, input, sessions_dir)
+  defp handle_input(%State{mode: :input} = state, input, projects_dir) do
+    dispatch_input_mode(state, input, projects_dir)
   end
 
-  defp handle_input(%State{mode: :confirm} = state, input, sessions_dir) do
-    dispatch_confirm_mode(state, input, sessions_dir)
+  defp handle_input(%State{mode: :confirm} = state, input, projects_dir) do
+    dispatch_confirm_mode(state, input, projects_dir)
   end
 
-  defp handle_input(state, input, sessions_dir) do
+  defp handle_input(state, input, projects_dir) do
     state
-    |> dispatch_input(input, sessions_dir)
+    |> dispatch_input(input, projects_dir)
     |> State.clear_message()
   end
 
-  defp dispatch_edit_input(state, :escape, _sessions_dir) do
+  defp dispatch_edit_input(state, :escape, _projects_dir) do
     State.exit_edit_mode(state)
     |> State.set_message("Edit cancelled")
   end
 
-  defp dispatch_edit_input(state, :tab, _sessions_dir) do
+  defp dispatch_edit_input(state, :tab, _projects_dir) do
     save_current_field(state)
     |> State.next_edit_field()
   end
 
-  defp dispatch_edit_input(state, :shift_tab, _sessions_dir) do
+  defp dispatch_edit_input(state, :shift_tab, _projects_dir) do
     save_current_field(state)
     |> State.prev_edit_field()
   end
 
-  defp dispatch_edit_input(state, :enter, sessions_dir) do
-    save_and_exit_edit(state, sessions_dir)
+  defp dispatch_edit_input(state, :enter, projects_dir) do
+    save_and_exit_edit(state, projects_dir)
   end
 
-  defp dispatch_edit_input(state, :backspace, _sessions_dir) do
+  defp dispatch_edit_input(state, :backspace, _projects_dir) do
     State.edit_delete_char(state)
   end
 
-  defp dispatch_edit_input(state, :left, _sessions_dir) do
+  defp dispatch_edit_input(state, :left, _projects_dir) do
     State.edit_move_cursor_left(state)
   end
 
-  defp dispatch_edit_input(state, :right, _sessions_dir) do
+  defp dispatch_edit_input(state, :right, _projects_dir) do
     State.edit_move_cursor_right(state)
   end
 
-  defp dispatch_edit_input(state, :home, _sessions_dir) do
+  defp dispatch_edit_input(state, :home, _projects_dir) do
     State.edit_cursor_home(state)
   end
 
-  defp dispatch_edit_input(state, :end, _sessions_dir) do
+  defp dispatch_edit_input(state, :end, _projects_dir) do
     State.edit_cursor_end(state)
   end
 
-  defp dispatch_edit_input(state, {:char, char}, _sessions_dir) do
+  defp dispatch_edit_input(state, {:char, char}, _projects_dir) do
     State.edit_insert_char(state, char)
   end
 
-  defp dispatch_edit_input(state, _, _sessions_dir), do: state
+  defp dispatch_edit_input(state, _, _projects_dir), do: state
 
-  defp dispatch_input(state, {:char, char}, sessions_dir) do
-    handle_char(state, char, sessions_dir)
+  defp dispatch_input(state, {:char, char}, projects_dir) do
+    handle_char(state, char, projects_dir)
   end
 
-  defp dispatch_input(state, :down, _sessions_dir), do: State.move_down(state)
-  defp dispatch_input(state, :up, _sessions_dir), do: State.move_up(state)
-  defp dispatch_input(state, :right, _sessions_dir), do: State.next_panel(state)
-  defp dispatch_input(state, :left, _sessions_dir), do: State.prev_panel(state)
-  defp dispatch_input(state, :tab, _sessions_dir), do: State.next_panel(state)
-  defp dispatch_input(state, :shift_tab, _sessions_dir), do: State.prev_panel(state)
-  defp dispatch_input(state, :enter, sessions_dir), do: handle_enter(state, sessions_dir)
-  defp dispatch_input(state, _, _sessions_dir), do: state
+  defp dispatch_input(state, :down, _projects_dir), do: State.move_down(state)
+  defp dispatch_input(state, :up, _projects_dir), do: State.move_up(state)
+  defp dispatch_input(state, :right, _projects_dir), do: State.next_panel(state)
+  defp dispatch_input(state, :left, _projects_dir), do: State.prev_panel(state)
+  defp dispatch_input(state, :tab, _projects_dir), do: State.next_panel(state)
+  defp dispatch_input(state, :shift_tab, _projects_dir), do: State.prev_panel(state)
+  defp dispatch_input(state, :enter, projects_dir), do: handle_enter(state, projects_dir)
+  defp dispatch_input(state, _, _projects_dir), do: state
 
-  defp handle_char(state, "q", _sessions_dir), do: State.quit(state)
-  defp handle_char(state, "Q", _sessions_dir), do: State.quit(state)
-  defp handle_char(state, "j", _sessions_dir), do: State.move_down(state)
-  defp handle_char(state, "k", _sessions_dir), do: State.move_up(state)
-  defp handle_char(state, "l", _sessions_dir), do: State.next_panel(state)
-  defp handle_char(state, "h", _sessions_dir), do: State.prev_panel(state)
-  defp handle_char(state, "s", _sessions_dir), do: handle_start(state)
-  defp handle_char(state, "d", _sessions_dir), do: handle_done(state)
-  defp handle_char(state, "r", _sessions_dir), do: handle_reset(state)
-  defp handle_char(state, "R", sessions_dir), do: handle_refresh(state, sessions_dir)
-  defp handle_char(state, "a", _sessions_dir), do: handle_add(state)
-  defp handle_char(state, "n", _sessions_dir), do: handle_new_session(state)
-  defp handle_char(state, "e", _sessions_dir), do: handle_edit(state)
-  defp handle_char(state, "x", _sessions_dir), do: handle_delete(state)
-  defp handle_char(state, "X", _sessions_dir), do: handle_delete(state)
-  defp handle_char(state, _, _sessions_dir), do: state
+  defp handle_char(state, "q", _projects_dir), do: State.quit(state)
+  defp handle_char(state, "Q", _projects_dir), do: State.quit(state)
+  defp handle_char(state, "j", _projects_dir), do: State.move_down(state)
+  defp handle_char(state, "k", _projects_dir), do: State.move_up(state)
+  defp handle_char(state, "l", _projects_dir), do: State.next_panel(state)
+  defp handle_char(state, "h", _projects_dir), do: State.prev_panel(state)
+  defp handle_char(state, "s", _projects_dir), do: handle_start(state)
+  defp handle_char(state, "d", _projects_dir), do: handle_done(state)
+  defp handle_char(state, "r", _projects_dir), do: handle_reset(state)
+  defp handle_char(state, "R", projects_dir), do: handle_refresh(state, projects_dir)
+  defp handle_char(state, "a", _projects_dir), do: handle_add(state)
+  defp handle_char(state, "n", _projects_dir), do: handle_new_project(state)
+  defp handle_char(state, "e", _projects_dir), do: handle_edit(state)
+  defp handle_char(state, "x", _projects_dir), do: handle_delete(state)
+  defp handle_char(state, "X", _projects_dir), do: handle_delete(state)
+  defp handle_char(state, _, _projects_dir), do: state
 
-  defp handle_enter(%State{active_panel: :sessions} = state, sessions_dir) do
-    case State.current_session(state) do
+  defp handle_enter(%State{active_panel: :projects} = state, projects_dir) do
+    case State.current_project(state) do
       nil ->
-        State.set_message(state, "No session selected")
+        State.set_message(state, "No project selected")
 
-      session ->
-        session_path = Path.join(sessions_dir, session.id)
+      project ->
+        project_path = Path.join(projects_dir, project.id)
 
-        case State.load_tickets(state, session_path) do
+        case State.load_tickets(state, project_path) do
           {:ok, new_state} ->
             new_state
             |> State.set_message("Loaded #{length(new_state.data.tickets)} tickets")
@@ -176,10 +176,10 @@ defmodule Albedo.TUI do
     end
   end
 
-  defp handle_enter(state, _sessions_dir), do: state
+  defp handle_enter(state, _projects_dir), do: state
 
   defp handle_start(%State{data: nil} = state) do
-    State.set_message(state, "No session loaded")
+    State.set_message(state, "No project loaded")
   end
 
   defp handle_start(%State{data: data} = state) do
@@ -199,7 +199,7 @@ defmodule Albedo.TUI do
   end
 
   defp handle_done(%State{data: nil} = state) do
-    State.set_message(state, "No session loaded")
+    State.set_message(state, "No project loaded")
   end
 
   defp handle_done(%State{data: data} = state) do
@@ -219,7 +219,7 @@ defmodule Albedo.TUI do
   end
 
   defp handle_reset(%State{data: nil} = state) do
-    State.set_message(state, "No session loaded")
+    State.set_message(state, "No project loaded")
   end
 
   defp handle_reset(%State{data: data} = state) do
@@ -238,14 +238,14 @@ defmodule Albedo.TUI do
     end
   end
 
-  defp handle_refresh(state, sessions_dir) do
+  defp handle_refresh(state, projects_dir) do
     state
-    |> State.load_sessions(sessions_dir)
-    |> State.set_message("Refreshed sessions")
+    |> State.load_projects(projects_dir)
+    |> State.set_message("Refreshed projects")
   end
 
-  defp save_and_update(%State{session_dir: session_dir} = state, updated_data, message) do
-    case Tickets.save(session_dir, updated_data) do
+  defp save_and_update(%State{project_dir: project_dir} = state, updated_data, message) do
+    case Tickets.save(project_dir, updated_data) do
       :ok ->
         state
         |> Map.put(:data, updated_data)
@@ -257,10 +257,10 @@ defmodule Albedo.TUI do
   end
 
   defp handle_add_ticket(%State{data: nil} = state) do
-    State.set_message(state, "Load a session first (Enter on sessions panel)")
+    State.set_message(state, "Load a project first (Enter on projects panel)")
   end
 
-  defp handle_add_ticket(%State{data: data, session_dir: session_dir} = state) do
+  defp handle_add_ticket(%State{data: data, project_dir: project_dir} = state) do
     next_id = next_ticket_id(data.tickets)
 
     new_ticket =
@@ -274,7 +274,7 @@ defmodule Albedo.TUI do
     updated_tickets = data.tickets ++ [new_ticket]
     updated_data = %{data | tickets: updated_tickets}
 
-    case Tickets.save(session_dir, updated_data) do
+    case Tickets.save(project_dir, updated_data) do
       :ok ->
         new_idx = length(updated_tickets) - 1
 
@@ -306,7 +306,7 @@ defmodule Albedo.TUI do
   defp parse_ticket_id(_), do: 0
 
   defp enter_edit_mode(%State{data: nil} = state) do
-    State.set_message(state, "No session loaded")
+    State.set_message(state, "No project loaded")
   end
 
   defp enter_edit_mode(%State{} = state) do
@@ -333,10 +333,10 @@ defmodule Albedo.TUI do
     %{state | data: updated_data}
   end
 
-  defp save_and_exit_edit(%State{session_dir: session_dir} = state, _sessions_dir) do
+  defp save_and_exit_edit(%State{project_dir: project_dir} = state, _projects_dir) do
     state = save_current_field(state)
 
-    case Tickets.save(session_dir, state.data) do
+    case Tickets.save(project_dir, state.data) do
       :ok ->
         state
         |> State.exit_edit_mode()
@@ -350,10 +350,10 @@ defmodule Albedo.TUI do
   end
 
   defp handle_delete_ticket(%State{data: nil} = state) do
-    State.set_message(state, "No session loaded")
+    State.set_message(state, "No project loaded")
   end
 
-  defp handle_delete_ticket(%State{data: data, session_dir: session_dir} = state) do
+  defp handle_delete_ticket(%State{data: data, project_dir: project_dir} = state) do
     case State.current_ticket(state) do
       nil ->
         State.set_message(state, "No ticket selected")
@@ -362,7 +362,7 @@ defmodule Albedo.TUI do
         updated_tickets = Enum.reject(data.tickets, &(&1.id == ticket.id))
         updated_data = %{data | tickets: updated_tickets}
 
-        case Tickets.save(session_dir, updated_data) do
+        case Tickets.save(project_dir, updated_data) do
           :ok ->
             new_idx = min(state.selected_ticket, max(0, length(updated_tickets) - 1))
 
@@ -375,104 +375,104 @@ defmodule Albedo.TUI do
     end
   end
 
-  defp dispatch_input_mode(state, :escape, _sessions_dir) do
+  defp dispatch_input_mode(state, :escape, _projects_dir) do
     State.exit_input_mode(state)
     |> State.set_message("Cancelled")
   end
 
-  defp dispatch_input_mode(state, :enter, sessions_dir) do
-    handle_input_submit(state, sessions_dir)
+  defp dispatch_input_mode(state, :enter, projects_dir) do
+    handle_input_submit(state, projects_dir)
   end
 
-  defp dispatch_input_mode(state, :backspace, _sessions_dir) do
+  defp dispatch_input_mode(state, :backspace, _projects_dir) do
     State.input_delete_char(state)
   end
 
-  defp dispatch_input_mode(state, :left, _sessions_dir) do
+  defp dispatch_input_mode(state, :left, _projects_dir) do
     State.input_move_cursor_left(state)
   end
 
-  defp dispatch_input_mode(state, :right, _sessions_dir) do
+  defp dispatch_input_mode(state, :right, _projects_dir) do
     State.input_move_cursor_right(state)
   end
 
-  defp dispatch_input_mode(state, {:char, char}, _sessions_dir) do
+  defp dispatch_input_mode(state, {:char, char}, _projects_dir) do
     State.input_insert_char(state, char)
   end
 
-  defp dispatch_input_mode(state, _, _sessions_dir), do: state
+  defp dispatch_input_mode(state, _, _projects_dir), do: state
 
   defp handle_input_submit(
-         %State{input_mode: :new_session, input_buffer: task} = state,
-         sessions_dir
+         %State{input_mode: :new_project, input_buffer: task} = state,
+         projects_dir
        ) do
     if String.trim(task) == "" do
       State.exit_input_mode(state)
-      |> State.set_message("Session task cannot be empty")
+      |> State.set_message("Project task cannot be empty")
     else
-      create_new_session(state, task, sessions_dir)
+      create_new_project(state, task, projects_dir)
     end
   end
 
   defp handle_input_submit(
-         %State{input_mode: :edit_session, input_buffer: task} = state,
-         sessions_dir
+         %State{input_mode: :edit_project, input_buffer: task} = state,
+         projects_dir
        ) do
     if String.trim(task) == "" do
       State.exit_input_mode(state)
-      |> State.set_message("Session task cannot be empty")
+      |> State.set_message("Project task cannot be empty")
     else
-      save_session_task(state, task, sessions_dir)
+      save_project_task(state, task, projects_dir)
     end
   end
 
-  defp handle_input_submit(state, _sessions_dir) do
+  defp handle_input_submit(state, _projects_dir) do
     State.exit_input_mode(state)
   end
 
-  defp dispatch_confirm_mode(state, {:char, "y"}, sessions_dir) do
-    execute_confirmed_action(state, sessions_dir)
+  defp dispatch_confirm_mode(state, {:char, "y"}, projects_dir) do
+    execute_confirmed_action(state, projects_dir)
   end
 
-  defp dispatch_confirm_mode(state, {:char, "Y"}, sessions_dir) do
-    execute_confirmed_action(state, sessions_dir)
+  defp dispatch_confirm_mode(state, {:char, "Y"}, projects_dir) do
+    execute_confirmed_action(state, projects_dir)
   end
 
-  defp dispatch_confirm_mode(state, {:char, "n"}, _sessions_dir) do
+  defp dispatch_confirm_mode(state, {:char, "n"}, _projects_dir) do
     State.exit_confirm_mode(state)
     |> State.set_message("Cancelled")
   end
 
-  defp dispatch_confirm_mode(state, {:char, "N"}, _sessions_dir) do
+  defp dispatch_confirm_mode(state, {:char, "N"}, _projects_dir) do
     State.exit_confirm_mode(state)
     |> State.set_message("Cancelled")
   end
 
-  defp dispatch_confirm_mode(state, :escape, _sessions_dir) do
+  defp dispatch_confirm_mode(state, :escape, _projects_dir) do
     State.exit_confirm_mode(state)
     |> State.set_message("Cancelled")
   end
 
-  defp dispatch_confirm_mode(state, _, _sessions_dir), do: state
+  defp dispatch_confirm_mode(state, _, _projects_dir), do: state
 
-  defp execute_confirmed_action(%State{confirm_action: :delete_session} = state, sessions_dir) do
-    delete_session(state, sessions_dir)
+  defp execute_confirmed_action(%State{confirm_action: :delete_project} = state, projects_dir) do
+    delete_project(state, projects_dir)
   end
 
-  defp execute_confirmed_action(state, _sessions_dir) do
+  defp execute_confirmed_action(state, _projects_dir) do
     State.exit_confirm_mode(state)
   end
 
-  defp handle_new_session(%State{active_panel: :sessions} = state) do
-    State.enter_input_mode(state, :new_session, "New session task: ")
+  defp handle_new_project(%State{active_panel: :projects} = state) do
+    State.enter_input_mode(state, :new_project, "New project task: ")
   end
 
-  defp handle_new_session(state) do
-    State.set_message(state, "Switch to sessions panel to create new session")
+  defp handle_new_project(state) do
+    State.set_message(state, "Switch to projects panel to create new project")
   end
 
-  defp handle_add(%State{active_panel: :sessions} = state) do
-    State.enter_input_mode(state, :new_session, "New session task: ")
+  defp handle_add(%State{active_panel: :projects} = state) do
+    State.enter_input_mode(state, :new_project, "New project task: ")
   end
 
   defp handle_add(%State{active_panel: :tickets} = state) do
@@ -481,16 +481,16 @@ defmodule Albedo.TUI do
 
   defp handle_add(state), do: state
 
-  defp handle_edit(%State{active_panel: :sessions} = state) do
-    case State.current_session(state) do
+  defp handle_edit(%State{active_panel: :projects} = state) do
+    case State.current_project(state) do
       nil ->
-        State.set_message(state, "No session selected")
+        State.set_message(state, "No project selected")
 
-      session ->
+      project ->
         state
-        |> State.enter_input_mode(:edit_session, "Edit task: ")
-        |> Map.put(:input_buffer, session.task)
-        |> Map.put(:input_cursor, String.length(session.task))
+        |> State.enter_input_mode(:edit_project, "Edit task: ")
+        |> Map.put(:input_buffer, project.task)
+        |> Map.put(:input_cursor, String.length(project.task))
     end
   end
 
@@ -500,16 +500,16 @@ defmodule Albedo.TUI do
 
   defp handle_edit(state), do: state
 
-  defp handle_delete(%State{active_panel: :sessions} = state) do
-    case State.current_session(state) do
+  defp handle_delete(%State{active_panel: :projects} = state) do
+    case State.current_project(state) do
       nil ->
-        State.set_message(state, "No session selected")
+        State.set_message(state, "No project selected")
 
-      session ->
+      project ->
         State.enter_confirm_mode(
           state,
-          :delete_session,
-          "Delete session '#{session.id}'? (y/n)"
+          :delete_project,
+          "Delete project '#{project.id}'? (y/n)"
         )
     end
   end
@@ -520,45 +520,48 @@ defmodule Albedo.TUI do
 
   defp handle_delete(state), do: state
 
-  defp create_new_session(state, task, sessions_dir) do
-    session_state = Albedo.Session.State.new(".", task)
+  defp create_new_project(state, task, projects_dir) do
+    project_state = Project.State.new(".", task)
 
-    case Albedo.Session.State.save(session_state) do
+    case Project.State.save(project_state) do
       :ok ->
         state
         |> State.exit_input_mode()
-        |> State.load_sessions(sessions_dir)
-        |> Map.put(:current_session, 0)
-        |> State.set_message("Created session: #{session_state.id}")
+        |> State.load_projects(projects_dir)
+        |> Map.put(:current_project, 0)
+        |> State.set_message("Created project: #{project_state.id}")
 
       {:error, reason} ->
         state
         |> State.exit_input_mode()
-        |> State.set_message("Failed to create session: #{inspect(reason)}")
+        |> State.set_message("Failed to create project: #{inspect(reason)}")
     end
   end
 
-  defp save_session_task(state, task, sessions_dir) do
-    case State.current_session(state) do
+  defp save_project_task(state, task, projects_dir) do
+    case State.current_project(state) do
       nil ->
         state
         |> State.exit_input_mode()
-        |> State.set_message("No session selected")
+        |> State.set_message("No project selected")
 
-      session ->
-        session_path = Path.join(sessions_dir, session.id)
-        session_file = Path.join(session_path, "session.json")
+      project ->
+        project_path = Path.join(projects_dir, project.id)
+        project_file = Path.join(project_path, "project.json")
+        legacy_file = Path.join(project_path, "session.json")
 
-        with {:ok, content} <- File.read(session_file),
+        file_to_use = if File.exists?(project_file), do: project_file, else: legacy_file
+
+        with {:ok, content} <- File.read(file_to_use),
              {:ok, data} <- Jason.decode(content) do
           updated_data = Map.put(data, "task", task)
 
-          case File.write(session_file, Jason.encode!(updated_data, pretty: true)) do
+          case File.write(file_to_use, Jason.encode!(updated_data, pretty: true)) do
             :ok ->
               state
               |> State.exit_input_mode()
-              |> State.update_session_task(task)
-              |> State.set_message("Updated session task")
+              |> State.update_project_task(task)
+              |> State.set_message("Updated project task")
 
             {:error, reason} ->
               state
@@ -569,27 +572,27 @@ defmodule Albedo.TUI do
           {:error, reason} ->
             state
             |> State.exit_input_mode()
-            |> State.set_message("Failed to load session: #{inspect(reason)}")
+            |> State.set_message("Failed to load project: #{inspect(reason)}")
         end
     end
   end
 
-  defp delete_session(state, sessions_dir) do
-    case State.current_session(state) do
+  defp delete_project(state, projects_dir) do
+    case State.current_project(state) do
       nil ->
         state
         |> State.exit_confirm_mode()
-        |> State.set_message("No session selected")
+        |> State.set_message("No project selected")
 
-      session ->
-        session_path = Path.join(sessions_dir, session.id)
+      project ->
+        project_path = Path.join(projects_dir, project.id)
 
-        case File.rm_rf(session_path) do
+        case File.rm_rf(project_path) do
           {:ok, _} ->
             state
             |> State.exit_confirm_mode()
-            |> State.delete_session()
-            |> State.set_message("Deleted session: #{session.id}")
+            |> State.delete_project()
+            |> State.set_message("Deleted project: #{project.id}")
 
           {:error, reason, _} ->
             state

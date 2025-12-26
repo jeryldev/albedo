@@ -1,6 +1,7 @@
 defmodule Albedo.Agents.ConventionsTest do
   use ExUnit.Case, async: true
 
+  alias Albedo.Search.FileScanner
   alias Albedo.TestSupport.Mocks
 
   describe "app directory finding" do
@@ -215,7 +216,7 @@ defmodule Albedo.Agents.ConventionsTest do
   defp gather_test_samples(path) do
     test_path = Path.join(path, "test")
 
-    case Albedo.Search.FileScanner.find_files(test_path, "*_test.exs") do
+    case FileScanner.find_files(test_path, "*_test.exs") do
       {:ok, files} ->
         files
         |> Enum.take(@max_test_samples)

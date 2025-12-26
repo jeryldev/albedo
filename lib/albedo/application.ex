@@ -6,8 +6,8 @@ defmodule Albedo.Application do
   @impl true
   def start(_type, _args) do
     children = [
-      Albedo.Session.Registry,
-      Albedo.Session.Supervisor,
+      Albedo.Project.Registry,
+      Albedo.Project.Supervisor,
       Albedo.Agents.Supervisor
     ]
 

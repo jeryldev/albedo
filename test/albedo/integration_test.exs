@@ -4,8 +4,8 @@ defmodule Albedo.IntegrationTest do
   import ExUnit.CaptureIO
 
   alias Albedo.{CLI, Config}
+  alias Albedo.Project.State
   alias Albedo.Search.{FileScanner, Ripgrep}
-  alias Albedo.Session.State
   alias Albedo.TestSupport.Mocks
 
   defp run_cli_safely(args) do
@@ -100,19 +100,19 @@ defmodule Albedo.IntegrationTest do
     end
   end
 
-  describe "session state integration" do
+  describe "project state integration" do
     setup do
       dir = Mocks.create_temp_dir()
       on_exit(fn -> Mocks.cleanup_temp_dir(dir) end)
       {:ok, dir: dir}
     end
 
-    test "create, save, and load session state", %{dir: dir} do
+    test "create, save, and load project state", %{dir: dir} do
       codebase_path = "/test/codebase"
       task = "Add a new feature"
 
       state = State.new(codebase_path, task, [])
-      state = %{state | session_dir: dir}
+      state = %{state | project_dir: dir}
 
       :ok = State.save(state)
 
@@ -123,9 +123,9 @@ defmodule Albedo.IntegrationTest do
       assert loaded_state.id == state.id
     end
 
-    test "session state phase progression", %{dir: dir} do
+    test "project state phase progression", %{dir: dir} do
       state = State.new("/test", "Test task", [])
-      state = %{state | session_dir: dir}
+      state = %{state | project_dir: dir}
 
       assert State.first_incomplete_phase(state) == :domain_research
 
@@ -145,19 +145,19 @@ defmodule Albedo.IntegrationTest do
     end
   end
 
-  describe "greenfield session state integration" do
+  describe "greenfield project state integration" do
     setup do
       dir = Mocks.create_temp_dir()
       on_exit(fn -> Mocks.cleanup_temp_dir(dir) end)
       {:ok, dir: dir}
     end
 
-    test "create greenfield session state", %{dir: dir} do
+    test "create greenfield project state", %{dir: dir} do
       project_name = "my_todo_app"
       task = "Build a todo app with user authentication"
 
       state = State.new_greenfield(project_name, task, stack: "phoenix", database: "postgres")
-      state = %{state | session_dir: dir}
+      state = %{state | project_dir: dir}
 
       assert state.codebase_path == nil
       assert state.task == task
@@ -169,7 +169,7 @@ defmodule Albedo.IntegrationTest do
 
     test "greenfield skips code-specific phases but keeps planning phases", %{dir: dir} do
       state = State.new_greenfield("my_app", "Build an API", [])
-      state = %{state | session_dir: dir}
+      state = %{state | project_dir: dir}
 
       # Planning phases are active for greenfield
       assert state.phases[:domain_research].status == :pending
@@ -185,7 +185,7 @@ defmodule Albedo.IntegrationTest do
 
     test "greenfield phase progression includes planning phases", %{dir: dir} do
       state = State.new_greenfield("my_app", "Build an API", [])
-      state = %{state | session_dir: dir}
+      state = %{state | project_dir: dir}
 
       # Greenfield progression: domain_research -> tech_stack -> architecture -> change_planning
       assert State.first_incomplete_phase(state) == :domain_research
@@ -220,9 +220,9 @@ defmodule Albedo.IntegrationTest do
       assert State.complete?(state)
     end
 
-    test "save and load greenfield session", %{dir: dir} do
+    test "save and load greenfield project", %{dir: dir} do
       state = State.new_greenfield("my_app", "Build a CLI tool", stack: "elixir")
-      state = %{state | session_dir: dir}
+      state = %{state | project_dir: dir}
 
       :ok = State.save(state)
       {:ok, loaded_state} = State.load(dir)

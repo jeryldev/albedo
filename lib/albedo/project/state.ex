@@ -1,6 +1,6 @@
-defmodule Albedo.Session.State do
+defmodule Albedo.Project.State do
   @moduledoc """
-  Session state struct and state machine logic.
+  Project state struct and state machine logic.
   """
 
   @type phase_status :: :pending | :in_progress | :completed | :failed | :skipped
@@ -14,7 +14,7 @@ defmodule Albedo.Session.State do
           error: term() | nil
         }
 
-  @type session_state ::
+  @type project_state ::
           :created
           | :researching_domain
           | :analyzing_tech_stack
@@ -31,10 +31,10 @@ defmodule Albedo.Session.State do
           id: String.t(),
           codebase_path: String.t(),
           task: String.t(),
-          state: session_state(),
+          state: project_state(),
           created_at: DateTime.t(),
           updated_at: DateTime.t(),
-          session_dir: String.t(),
+          project_dir: String.t(),
           config: map(),
           phases: %{
             domain_research: phase_state(),
@@ -57,7 +57,7 @@ defmodule Albedo.Session.State do
     :state,
     :created_at,
     :updated_at,
-    :session_dir,
+    :project_dir,
     config: %{},
     phases: %{},
     context: %{},
@@ -96,13 +96,13 @@ defmodule Albedo.Session.State do
   }
 
   @doc """
-  Create a new session state.
+  Create a new project state.
   """
   def new(codebase_path, task, opts \\ []) do
     now = DateTime.utc_now()
-    id = generate_id(task, opts[:session])
+    id = generate_id(task, opts[:project] || opts[:session])
     config = Albedo.Config.load!()
-    session_dir = Path.join(Albedo.Config.session_dir(config), id)
+    project_dir = Path.join(Albedo.Config.projects_dir(config), id)
 
     %__MODULE__{
       id: id,
@@ -111,8 +111,8 @@ defmodule Albedo.Session.State do
       state: :created,
       created_at: now,
       updated_at: now,
-      session_dir: session_dir,
-      config: build_session_config(opts),
+      project_dir: project_dir,
+      config: build_project_config(opts),
       phases: init_phases(),
       context: %{},
       clarifying_questions: [],
@@ -121,14 +121,14 @@ defmodule Albedo.Session.State do
   end
 
   @doc """
-  Create a new greenfield session state (no existing codebase).
+  Create a new greenfield project state (no existing codebase).
   Skips code analysis phases and goes directly to planning.
   """
   def new_greenfield(project_name, task, opts \\ []) do
     now = DateTime.utc_now()
-    id = generate_id(task, opts[:session])
+    id = generate_id(task, opts[:project] || opts[:session])
     config = Albedo.Config.load!()
-    session_dir = Path.join(Albedo.Config.session_dir(config), id)
+    project_dir = Path.join(Albedo.Config.projects_dir(config), id)
 
     %__MODULE__{
       id: id,
@@ -137,7 +137,7 @@ defmodule Albedo.Session.State do
       state: :created,
       created_at: now,
       updated_at: now,
-      session_dir: session_dir,
+      project_dir: project_dir,
       config: build_greenfield_config(project_name, opts),
       phases: init_greenfield_phases(),
       context: %{
@@ -152,25 +152,33 @@ defmodule Albedo.Session.State do
   end
 
   @doc """
-  Load session state from a session directory.
+  Load project state from a project directory.
   """
-  def load(session_dir) do
-    session_file = Path.join(session_dir, "session.json")
+  def load(project_dir) do
+    project_file = Path.join(project_dir, "project.json")
+    legacy_file = Path.join(project_dir, "session.json")
 
-    with {:ok, content} <- File.read(session_file),
+    file_to_load =
+      cond do
+        File.exists?(project_file) -> project_file
+        File.exists?(legacy_file) -> legacy_file
+        true -> project_file
+      end
+
+    with {:ok, content} <- File.read(file_to_load),
          {:ok, data} <- Jason.decode(content) do
-      {:ok, from_json(data, session_dir)}
+      {:ok, from_json(data, project_dir)}
     end
   end
 
   @doc """
-  Save session state to disk.
+  Save project state to disk.
   """
   def save(%__MODULE__{} = state) do
-    File.mkdir_p!(state.session_dir)
-    session_file = Path.join(state.session_dir, "session.json")
+    File.mkdir_p!(state.project_dir)
+    project_file = Path.join(state.project_dir, "project.json")
     content = Jason.encode!(to_json(state), pretty: true)
-    File.write(session_file, content)
+    File.write(project_file, content)
   end
 
   @doc """
@@ -184,7 +192,7 @@ defmodule Albedo.Session.State do
   def phase_output_file(phase), do: @phase_output_files[phase]
 
   @doc """
-  Get the session state name for a phase.
+  Get the project state name for a phase.
   """
   def phase_state_name(phase), do: @phase_to_state[phase]
 
@@ -228,9 +236,9 @@ defmodule Albedo.Session.State do
         %{phase_state | status: :in_progress, started_at: now}
       end)
 
-    session_state = @phase_to_state[phase]
+    project_state = @phase_to_state[phase]
 
-    %{state | phases: phases, state: session_state, updated_at: now}
+    %{state | phases: phases, state: project_state, updated_at: now}
   end
 
   @doc """
@@ -313,13 +321,13 @@ defmodule Albedo.Session.State do
   end
 
   @doc """
-  Check if session is complete.
+  Check if project is complete.
   """
   def complete?(%__MODULE__{state: :completed}), do: true
   def complete?(%__MODULE__{}), do: false
 
   @doc """
-  Check if session has failed.
+  Check if project has failed.
   """
   def failed?(%__MODULE__{state: :failed}), do: true
   def failed?(%__MODULE__{}), do: false
@@ -365,7 +373,7 @@ defmodule Albedo.Session.State do
     |> Map.new()
   end
 
-  defp build_session_config(opts) do
+  defp build_project_config(opts) do
     %{
       interactive: opts[:interactive] || false
     }
@@ -382,9 +390,6 @@ defmodule Albedo.Session.State do
   end
 
   defp init_greenfield_phases do
-    # Greenfield projects skip code-specific phases but include planning phases
-    # Active: domain_research, tech_stack, architecture, change_planning
-    # Skipped: conventions, feature_location, impact_analysis (require existing code)
     skipped_phases = [
       :conventions,
       :feature_location,
@@ -439,7 +444,7 @@ defmodule Albedo.Session.State do
     |> Map.new()
   end
 
-  defp from_json(data, session_dir) do
+  defp from_json(data, project_dir) do
     %__MODULE__{
       id: data["id"],
       codebase_path: data["codebase_path"],
@@ -447,7 +452,7 @@ defmodule Albedo.Session.State do
       state: String.to_existing_atom(data["state"]),
       created_at: parse_datetime(data["created_at"]),
       updated_at: parse_datetime(data["updated_at"]),
-      session_dir: session_dir,
+      project_dir: project_dir,
       config: data["config"] || %{},
       phases: phases_from_json(data["phases"]),
       context: %{},

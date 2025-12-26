@@ -78,8 +78,11 @@ defmodule Albedo.TUI.Renderer do
 
   defp build_header_line(state, width) do
     title = " Albedo TUI "
-    session_info = if state.data, do: " │ #{state.data.session_id}", else: ""
-    header = title <> session_info
+
+    project_info =
+      if state.data, do: " │ #{state.data.project_id || state.data.session_id}", else: ""
+
+    header = title <> project_info
 
     @colors.bold <> @colors.cyan <> String.pad_trailing(header, width) <> @colors.reset
   end
@@ -134,48 +137,48 @@ defmodule Albedo.TUI.Renderer do
 
     panel_start = 3
     panel_height = height - 4
-    sessions_height = div(panel_height, 3)
+    projects_height = div(panel_height, 3)
 
     panel_row = row - panel_start + 1
 
     left_content =
-      build_left_panel_char(panel_row, state, left_width, sessions_height, panel_height)
+      build_left_panel_char(panel_row, state, left_width, projects_height, panel_height)
 
     right_content = build_right_panel_char(panel_row, state, right_width, panel_height)
 
     left_content <> right_content
   end
 
-  defp build_left_panel_char(panel_row, state, width, sessions_height, panel_height) do
-    tickets_height = panel_height - sessions_height
+  defp build_left_panel_char(panel_row, state, width, projects_height, panel_height) do
+    tickets_height = panel_height - projects_height
 
     cond do
       panel_row <= 0 or panel_row > panel_height ->
         String.duplicate(" ", width)
 
-      panel_row <= sessions_height ->
-        build_sessions_line(panel_row, state, width, sessions_height)
+      panel_row <= projects_height ->
+        build_projects_line(panel_row, state, width, projects_height)
 
       true ->
-        ticket_row = panel_row - sessions_height
+        ticket_row = panel_row - projects_height
         build_tickets_line(ticket_row, state, width, tickets_height)
     end
   end
 
-  defp build_sessions_line(row, state, width, height) do
-    is_active = state.active_panel == :sessions
+  defp build_projects_line(row, state, width, height) do
+    is_active = state.active_panel == :projects
     border_color = if is_active, do: @colors.cyan, else: @colors.dim
 
     cond do
       row == 1 ->
-        build_top_border(" Sessions ", width, border_color, is_active)
+        build_top_border(" Projects ", width, border_color, is_active)
 
       row == height ->
         build_bottom_border(width, border_color)
 
       true ->
         content_row = row - 2
-        content = build_session_content(content_row, state, width - 2)
+        content = build_project_content(content_row, state, width - 2)
 
         border_color <>
           @border_chars.vertical <>
@@ -183,22 +186,22 @@ defmodule Albedo.TUI.Renderer do
     end
   end
 
-  defp build_session_content(row, state, width) do
-    session = Enum.at(state.sessions, row)
+  defp build_project_content(row, state, width) do
+    project = Enum.at(state.projects, row)
 
-    if session do
-      is_selected = row == state.current_session and state.active_panel == :sessions
-      build_session_item(session, width, is_selected)
+    if project do
+      is_selected = row == state.current_project and state.active_panel == :projects
+      build_project_item(project, width, is_selected)
     else
       String.duplicate(" ", width)
     end
   end
 
-  defp build_session_item(session, width, is_selected) do
+  defp build_project_item(project, width, is_selected) do
     bg = if is_selected, do: @colors.bg_blue, else: ""
-    state_color = session_state_color(session.state)
+    state_color = project_state_color(project.state)
     indicator = if is_selected, do: "▶ ", else: "  "
-    id = String.slice(session.id, 0, width - 4)
+    id = String.slice(project.id, 0, width - 4)
 
     bg <> indicator <> state_color <> String.pad_trailing(id, width - 2) <> @colors.reset
   end
@@ -236,7 +239,7 @@ defmodule Albedo.TUI.Renderer do
       end
     else
       if row == 0 do
-        msg = "No session selected"
+        msg = "No project selected"
         @colors.dim <> String.pad_trailing(msg, width) <> @colors.reset
       else
         String.duplicate(" ", width)
@@ -296,7 +299,7 @@ defmodule Albedo.TUI.Renderer do
     cond do
       state.data == nil ->
         if row == 0 do
-          @colors.dim <> String.pad_trailing("Select a session", width) <> @colors.reset
+          @colors.dim <> String.pad_trailing("Select a project", width) <> @colors.reset
         else
           String.duplicate(" ", width)
         end
@@ -495,10 +498,10 @@ defmodule Albedo.TUI.Renderer do
       @border_chars.bottom_right <> @colors.reset
   end
 
-  defp session_state_color("completed"), do: @colors.green
-  defp session_state_color("failed"), do: @colors.red
-  defp session_state_color("paused"), do: @colors.yellow
-  defp session_state_color(_), do: @colors.dim
+  defp project_state_color("completed"), do: @colors.green
+  defp project_state_color("failed"), do: @colors.red
+  defp project_state_color("paused"), do: @colors.yellow
+  defp project_state_color(_), do: @colors.dim
 
   defp status_indicator(:pending), do: "○"
   defp status_indicator(:in_progress), do: "●"
@@ -692,7 +695,7 @@ defmodule Albedo.TUI.Renderer do
     end
   end
 
-  defp status_bar_help(:sessions) do
+  defp status_bar_help(:projects) do
     " j/k:nav  Tab:panel  Enter:select  n:new  e:edit  x:delete  R:refresh  q:quit "
   end
 

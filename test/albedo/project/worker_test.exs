@@ -1,27 +1,27 @@
-defmodule Albedo.Session.WorkerTest do
+defmodule Albedo.Project.WorkerTest do
   use ExUnit.Case, async: true
 
-  alias Albedo.Session.State
+  alias Albedo.Project.State
   alias Albedo.TestSupport.Mocks
 
   describe "state management" do
-    test "new session starts in created state" do
+    test "new project starts in created state" do
       state = State.new("/tmp/test", "Test task", [])
       assert state.state == :created
     end
 
-    test "session has unique id" do
+    test "project has unique id" do
       state1 = State.new("/tmp/test", "Task 1", [])
       state2 = State.new("/tmp/test", "Task 2", [])
       refute state1.id == state2.id
     end
 
-    test "session tracks codebase path" do
+    test "project tracks codebase path" do
       state = State.new("/my/codebase", "Test task", [])
       assert state.codebase_path == "/my/codebase"
     end
 
-    test "session tracks task" do
+    test "project tracks task" do
       state = State.new("/tmp/test", "My feature task", [])
       assert state.task == "My feature task"
     end
@@ -91,16 +91,16 @@ defmodule Albedo.Session.WorkerTest do
     end
   end
 
-  describe "session persistence" do
+  describe "project persistence" do
     setup do
       dir = Mocks.create_temp_dir()
       on_exit(fn -> Mocks.cleanup_temp_dir(dir) end)
       {:ok, dir: dir}
     end
 
-    test "save and load session state", %{dir: dir} do
+    test "save and load project state", %{dir: dir} do
       state = State.new("/tmp/codebase", "Test task", [])
-      state = %{state | session_dir: dir}
+      state = %{state | project_dir: dir}
 
       :ok = State.save(state)
 
@@ -122,7 +122,7 @@ defmodule Albedo.Session.WorkerTest do
     end
   end
 
-  describe "session completion" do
+  describe "project completion" do
     test "complete? returns false when phases pending" do
       state = State.new("/tmp/test", "Test task", [])
       refute State.complete?(state)

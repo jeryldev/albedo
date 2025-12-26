@@ -25,11 +25,11 @@ defmodule Albedo do
       # Plan a new project from scratch
       albedo plan --name my_app --task "Build a todo app" --stack phoenix
 
-      # Resume an incomplete session
-      albedo resume ~/.albedo/sessions/2025-01-15_user-auth/
+      # Resume an incomplete project
+      albedo resume ~/.albedo/projects/2025-01-15_user-auth/
 
-      # List sessions
-      albedo sessions
+      # List projects
+      albedo projects
 
   ## Configuration
 
@@ -54,16 +54,16 @@ defmodule Albedo do
   end
 
   @doc """
-  Start an analysis session.
+  Start an analysis project.
 
-  See `Albedo.Session.start/3` for options.
+  See `Albedo.Project.start/3` for options.
   """
-  defdelegate analyze(path, task, opts \\ []), to: Albedo.Session, as: :start
+  defdelegate analyze(path, task, opts \\ []), to: Albedo.Project, as: :start
 
   @doc """
-  Resume an existing session.
+  Resume an existing project.
 
-  See `Albedo.Session.resume/1` for details.
+  See `Albedo.Project.resume/1` for details.
   """
-  defdelegate resume(session_dir), to: Albedo.Session
+  defdelegate resume(project_dir), to: Albedo.Project
 end

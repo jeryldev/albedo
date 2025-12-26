@@ -1,6 +1,8 @@
 defmodule Albedo.Agents.ArchitectureTest do
   use ExUnit.Case, async: true
 
+  alias Albedo.Search.FileScanner
+  alias Albedo.Search.Ripgrep
   alias Albedo.TestSupport.Mocks
 
   describe "structure analysis" do
@@ -175,7 +177,7 @@ defmodule Albedo.Agents.ArchitectureTest do
     lib_path = Path.join(path, "lib")
 
     modules =
-      case Albedo.Search.FileScanner.find_files(lib_path, "*.ex") do
+      case FileScanner.find_files(lib_path, "*.ex") do
         {:ok, files} -> Enum.map(files, &Path.basename(&1, ".ex"))
         _ -> []
       end
@@ -238,7 +240,7 @@ defmodule Albedo.Agents.ArchitectureTest do
   end
 
   defp find_schemas(context_path) do
-    case Albedo.Search.Ripgrep.search("use.*Schema|use Ecto.Schema",
+    case Ripgrep.search("use.*Schema|use Ecto.Schema",
            path: context_path,
            type: "elixir"
          ) do

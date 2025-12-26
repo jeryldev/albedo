@@ -1,13 +1,13 @@
-defmodule Albedo.Session.Worker do
+defmodule Albedo.Project.Worker do
   @moduledoc """
-  GenServer that orchestrates a single analysis session.
-  Coordinates agents through all phases and manages session state.
+  GenServer that orchestrates a single analysis project.
+  Coordinates agents through all phases and manages project state.
   """
 
   use GenServer
 
   alias Albedo.Agents
-  alias Albedo.Session.{Registry, State}
+  alias Albedo.Project.{Registry, State}
   alias Albedo.Tickets
 
   require Logger
@@ -46,8 +46,8 @@ defmodule Albedo.Session.Worker do
     GenServer.start_link(__MODULE__, {:greenfield, project_name, task, opts})
   end
 
-  def start_link({:resume, session_dir}) do
-    GenServer.start_link(__MODULE__, {:resume, session_dir})
+  def start_link({:resume, project_dir}) do
+    GenServer.start_link(__MODULE__, {:resume, project_dir})
   end
 
   @impl true
@@ -67,8 +67,8 @@ defmodule Albedo.Session.Worker do
     {:ok, state}
   end
 
-  def init({:resume, session_dir}) do
-    case State.load(session_dir) do
+  def init({:resume, project_dir}) do
+    case State.load(project_dir) do
       {:ok, state} ->
         Registry.register(state.id)
         send(self(), :resume_analysis)
@@ -128,7 +128,7 @@ defmodule Albedo.Session.Worker do
     State.save(state)
 
     if State.complete?(state) do
-      state = finalize_session(state)
+      state = finalize_project(state)
       {:stop, :normal, state}
     else
       state = start_next_phase(state)
@@ -166,8 +166,8 @@ defmodule Albedo.Session.Worker do
 
     {:ok, _pid} =
       Agents.Supervisor.start_agent(agent_module, %{
-        session_id: state.id,
-        session_dir: state.session_dir,
+        project_id: state.id,
+        project_dir: state.project_dir,
         codebase_path: state.codebase_path,
         task: state.task,
         phase: phase,
@@ -205,7 +205,7 @@ defmodule Albedo.Session.Worker do
 
   defp build_greenfield_context(_state), do: %{}
 
-  defp finalize_session(state) do
+  defp finalize_project(state) do
     header =
       if state.context[:greenfield],
         do: "Planning complete",
@@ -236,7 +236,7 @@ defmodule Albedo.Session.Worker do
         end
 
       tickets_data = Tickets.new(state.id, state.task, tickets, project_name: project_name)
-      Tickets.save(state.session_dir, tickets_data)
+      Tickets.save(state.project_dir, tickets_data)
       Owl.IO.puts(Owl.Data.tag("  │  └─ ✓ Saved tickets.json", :green))
     end
   end
@@ -264,8 +264,8 @@ defmodule Albedo.Session.Worker do
 
   defp build_result(state) do
     base_result = %{
-      session_id: state.id,
-      output_path: Path.join(state.session_dir, "FEATURE.md"),
+      project_id: state.id,
+      output_path: Path.join(state.project_dir, "FEATURE.md"),
       tickets_count: state.summary[:tickets_count],
       total_points: state.summary[:total_points],
       files_to_create: state.summary[:files_to_create],
@@ -313,7 +313,7 @@ defmodule Albedo.Session.Worker do
     Owl.IO.puts(Owl.Data.tag("  │  └─ ✗ #{phase_name} failed: #{inspect(reason)}", :red))
 
     Owl.IO.puts(
-      Owl.Data.tag("\nSession failed. You can retry with: albedo resume <session_path>", :yellow)
+      Owl.Data.tag("\nProject failed. You can retry with: albedo resume <project_path>", :yellow)
     )
   end
 end

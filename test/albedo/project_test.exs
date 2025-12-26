@@ -1,28 +1,28 @@
-defmodule Albedo.SessionTest do
+defmodule Albedo.ProjectTest do
   use ExUnit.Case, async: false
 
-  alias Albedo.Session
-  alias Albedo.Session.State
+  alias Albedo.Project
+  alias Albedo.Project.State
 
   describe "replan/2" do
-    test "returns error for non-existent session" do
-      nonexistent = "/tmp/nonexistent_session_#{System.unique_integer([:positive])}"
+    test "returns error for non-existent project" do
+      nonexistent = "/tmp/nonexistent_project_#{System.unique_integer([:positive])}"
 
-      assert {:error, _reason} = Session.replan(nonexistent)
+      assert {:error, _reason} = Project.replan(nonexistent)
     end
   end
 
   describe "get_state/1" do
-    test "returns error for non-existent session" do
-      result = Session.get_state("nonexistent-session-id")
+    test "returns error for non-existent project" do
+      result = Project.get_state("nonexistent-project-id")
 
       assert {:error, :not_found} = result
     end
   end
 
   describe "answer_question/2" do
-    test "returns error for non-existent session" do
-      result = Session.answer_question("nonexistent-session-id", "test answer")
+    test "returns error for non-existent project" do
+      result = Project.answer_question("nonexistent-project-id", "test answer")
 
       assert {:error, :not_found} = result
     end

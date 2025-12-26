@@ -1,10 +1,10 @@
-defmodule Albedo.Session.StateTest do
+defmodule Albedo.Project.StateTest do
   use ExUnit.Case, async: true
 
-  alias Albedo.Session.State
+  alias Albedo.Project.State
 
   describe "new/3" do
-    test "creates a new session state" do
+    test "creates a new project state" do
       state = State.new("/path/to/codebase", "Add user auth")
 
       assert state.codebase_path == "/path/to/codebase"
@@ -22,7 +22,7 @@ defmodule Albedo.Session.StateTest do
       end)
     end
 
-    test "generates unique session IDs" do
+    test "generates unique project IDs" do
       state1 = State.new("/path", "Task one")
       state2 = State.new("/path", "Task two")
 
@@ -144,7 +144,7 @@ defmodule Albedo.Session.StateTest do
   end
 
   describe "pause/2" do
-    test "pauses session and adds question" do
+    test "pauses project and adds question" do
       state = State.new("/path", "Task")
       state = State.pause(state, "Which database?")
 
@@ -155,7 +155,7 @@ defmodule Albedo.Session.StateTest do
   end
 
   describe "answer_question/3" do
-    test "records answer and resumes session" do
+    test "records answer and resumes project" do
       state = State.new("/path", "Task")
       state = State.pause(state, "Which database?")
       state = State.answer_question(state, "PostgreSQL", :researching_domain)
@@ -166,24 +166,24 @@ defmodule Albedo.Session.StateTest do
   end
 
   describe "complete?/1" do
-    test "returns true when session is completed" do
+    test "returns true when project is completed" do
       state = %{State.new("/path", "Task") | state: :completed}
       assert State.complete?(state)
     end
 
-    test "returns false when session is not completed" do
+    test "returns false when project is not completed" do
       state = State.new("/path", "Task")
       refute State.complete?(state)
     end
   end
 
   describe "failed?/1" do
-    test "returns true when session has failed" do
+    test "returns true when project has failed" do
       state = %{State.new("/path", "Task") | state: :failed}
       assert State.failed?(state)
     end
 
-    test "returns false when session has not failed" do
+    test "returns false when project has not failed" do
       state = State.new("/path", "Task")
       refute State.failed?(state)
     end

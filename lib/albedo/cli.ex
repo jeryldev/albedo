@@ -4,7 +4,7 @@ defmodule Albedo.CLI do
   Parses arguments and dispatches to appropriate commands.
   """
 
-  alias Albedo.{Config, Session, Tickets, TUI}
+  alias Albedo.{Config, Project, Tickets, TUI}
   alias Albedo.Tickets.Exporter
 
   @version Mix.Project.config()[:version]
@@ -38,6 +38,7 @@ defmodule Albedo.CLI do
           stack: :string,
           database: :string,
           name: :string,
+          project: :string,
           session: :string,
           status: :string,
           json: :boolean,
@@ -58,6 +59,7 @@ defmodule Albedo.CLI do
           t: :task,
           i: :interactive,
           n: :name,
+          P: :project,
           s: :session,
           f: :format,
           o: :output,
@@ -103,20 +105,24 @@ defmodule Albedo.CLI do
     cmd_analyze(path, opts)
   end
 
-  defp run_command(["resume", session_path | _], _opts) do
-    cmd_resume(session_path)
+  defp run_command(["resume", project_path | _], _opts) do
+    cmd_resume(project_path)
   end
 
-  defp run_command(["sessions" | _], _opts) do
-    cmd_sessions()
+  defp run_command(["projects" | subcommand], opts) do
+    cmd_projects_dispatch(subcommand, opts)
   end
 
-  defp run_command(["show", session_id | _], _opts) do
-    cmd_show(session_id)
+  defp run_command(["sessions" | subcommand], opts) do
+    cmd_projects_dispatch(subcommand, opts)
   end
 
-  defp run_command(["replan", session_path | _], opts) do
-    cmd_replan(session_path, opts)
+  defp run_command(["show", project_id | _], _opts) do
+    cmd_show(project_id)
+  end
+
+  defp run_command(["replan", project_path | _], opts) do
+    cmd_replan(project_path, opts)
   end
 
   defp run_command(["plan" | _], opts) do
@@ -127,14 +133,14 @@ defmodule Albedo.CLI do
     cmd_config(subcommand)
   end
 
-  defp run_command(["path", session_id | _], _opts) do
-    cmd_path(session_id)
+  defp run_command(["path", project_id | _], _opts) do
+    cmd_path(project_id)
   end
 
   defp run_command(["path"], _opts) do
-    print_error("Missing session ID")
-    print_info("Usage: albedo path <session_id>")
-    print_info("Then:  cd $(albedo path <session_id>)")
+    print_error("Missing project ID")
+    print_info("Usage: albedo path <project_id>")
+    print_info("Then:  cd $(albedo path <project_id>)")
     halt_with_error(1)
   end
 
@@ -208,7 +214,7 @@ defmodule Albedo.CLI do
       {:ok, config_file} ->
         print_success("Config directory ready!")
         print_info("Config file: #{config_file}")
-        print_info("Sessions dir: #{Config.sessions_dir()}")
+        print_info("Projects dir: #{Config.projects_dir()}")
         IO.puts("")
 
         config = Config.load!()
@@ -275,17 +281,17 @@ defmodule Albedo.CLI do
     print_info("Task: #{task}")
     print_separator()
 
-    case Session.start(path, task, opts) do
-      {:ok, session_id, result} ->
+    case Project.start(path, task, opts) do
+      {:ok, project_id, result} ->
         print_success("\nAnalysis complete!")
-        print_info("Session: #{session_id}")
+        print_info("Project: #{project_id}")
         print_info("Output: #{result.output_path}")
         print_summary(result)
 
-      {:error, {:phase_failed, session_id, session_dir}} ->
+      {:error, {:phase_failed, project_id, project_dir}} ->
         print_error("Analysis failed during a phase")
-        print_info("Session: #{session_id}")
-        print_info("You can retry with: albedo resume #{session_dir}")
+        print_info("Project: #{project_id}")
+        print_info("You can retry with: albedo resume #{project_dir}")
         halt_with_error(1)
 
       {:error, reason} ->
@@ -294,21 +300,21 @@ defmodule Albedo.CLI do
     end
   end
 
-  defp cmd_resume(session_path) do
+  defp cmd_resume(project_path) do
     print_header()
-    session_path = Path.expand(session_path)
+    project_path = Path.expand(project_path)
 
-    unless File.dir?(session_path) do
-      print_error("Session not found at: #{session_path}")
+    unless File.dir?(project_path) do
+      print_error("Project not found at: #{project_path}")
       halt_with_error(1)
     end
 
-    print_info("Resuming session: #{session_path}")
+    print_info("Resuming project: #{project_path}")
 
-    case Session.resume(session_path) do
-      {:ok, session_id, result} ->
+    case Project.resume(project_path) do
+      {:ok, project_id, result} ->
         print_success("\nAnalysis complete!")
-        print_info("Session: #{session_id}")
+        print_info("Project: #{project_id}")
         print_info("Output: #{result.output_path}")
         print_summary(result)
 
@@ -318,37 +324,162 @@ defmodule Albedo.CLI do
     end
   end
 
-  defp cmd_sessions do
+  defp cmd_projects_dispatch([], _opts), do: cmd_projects_list()
+  defp cmd_projects_dispatch(["list" | _], _opts), do: cmd_projects_list()
+
+  defp cmd_projects_dispatch(["create" | rest], opts) do
+    task = opts[:task] || List.first(rest)
+    cmd_projects_create(task, opts)
+  end
+
+  defp cmd_projects_dispatch(["rename", project_id, new_name | _], _opts) do
+    cmd_projects_rename(project_id, new_name)
+  end
+
+  defp cmd_projects_dispatch(["rename", _project_id | _], _opts) do
+    print_error("Missing new name for project")
+    print_info("Usage: albedo projects rename <project_id> <new_name>")
+    halt_with_error(1)
+  end
+
+  defp cmd_projects_dispatch(["rename" | _], _opts) do
+    print_error("Missing project ID and new name")
+    print_info("Usage: albedo projects rename <project_id> <new_name>")
+    halt_with_error(1)
+  end
+
+  defp cmd_projects_dispatch(["delete", project_id | _], opts) do
+    cmd_projects_delete(project_id, opts)
+  end
+
+  defp cmd_projects_dispatch(["delete" | _], _opts) do
+    print_error("Missing project ID")
+    print_info("Usage: albedo projects delete <project_id> [--yes]")
+    halt_with_error(1)
+  end
+
+  defp cmd_projects_dispatch([unknown | _], _opts) do
+    print_error("Unknown projects subcommand: #{unknown}")
+    IO.puts("")
+    IO.puts("Available subcommands:")
+    IO.puts("  albedo projects                       List all projects")
+    IO.puts("  albedo projects create --task \"...\"   Create new project folder")
+    IO.puts("  albedo projects rename <id> <name>    Rename project folder")
+    IO.puts("  albedo projects delete <id> [--yes]   Delete project folder")
+    halt_with_error(1)
+  end
+
+  defp cmd_projects_list do
     print_header()
     config = Config.load!()
-    sessions_dir = Config.session_dir(config)
+    projects_dir = Config.projects_dir(config)
 
-    case File.ls(sessions_dir) do
+    case File.ls(projects_dir) do
       {:ok, []} ->
-        print_info("No sessions found.")
+        print_info("No projects found.")
 
-      {:ok, sessions} ->
-        print_info("Recent sessions:")
+      {:ok, projects} ->
+        print_info("Recent projects:")
         print_separator()
-        sessions |> Enum.sort(:desc) |> Enum.each(&print_session_info(&1, sessions_dir))
+        projects |> Enum.sort(:desc) |> Enum.each(&print_project_info(&1, projects_dir))
 
       {:error, :enoent} ->
-        print_info("No sessions directory found. Run 'albedo init' first.")
+        print_info("No projects directory found. Run 'albedo init' first.")
 
       {:error, reason} ->
-        print_error("Failed to list sessions: #{inspect(reason)}")
+        print_error("Failed to list projects: #{inspect(reason)}")
     end
   end
 
-  defp print_session_info(session, sessions_dir) do
-    session_file = Path.join([sessions_dir, session, "session.json"])
-    {state, task} = load_session_metadata(session_file)
-    print_session(session, state, task)
+  defp cmd_projects_create(nil, _opts) do
+    print_error("Missing task description")
+    print_info("Usage: albedo projects create --task \"Your task description\"")
+    print_info("   or: albedo projects create \"Your task description\"")
+    halt_with_error(1)
   end
 
-  defp load_session_metadata(session_file) do
-    with true <- File.exists?(session_file),
-         {:ok, content} <- File.read(session_file),
+  defp cmd_projects_create(task, opts) do
+    print_header()
+
+    case Project.create_folder(task, opts) do
+      {:ok, project_id, project_dir} ->
+        print_success("Created project: #{project_id}")
+        print_info("Project path: #{project_dir}")
+        IO.puts("")
+        IO.puts("Next steps:")
+        IO.puts("  albedo show #{project_id}")
+        IO.puts("  cd $(albedo path #{project_id})")
+
+      {:error, reason} ->
+        print_error("Failed to create project: #{inspect(reason)}")
+        halt_with_error(1)
+    end
+  end
+
+  defp cmd_projects_rename(project_id, new_name) do
+    print_header()
+
+    case Project.rename_folder(project_id, new_name) do
+      {:ok, new_id, new_dir} ->
+        print_success("Renamed project: #{project_id} -> #{new_id}")
+        print_info("New path: #{new_dir}")
+
+      {:error, :project_not_found} ->
+        print_error("Project not found: #{project_id}")
+        halt_with_error(1)
+
+      {:error, :name_already_exists} ->
+        print_error("A project with that name already exists")
+        halt_with_error(1)
+
+      {:error, reason} ->
+        print_error("Failed to rename project: #{inspect(reason)}")
+        halt_with_error(1)
+    end
+  end
+
+  defp cmd_projects_delete(project_id, opts) do
+    print_header()
+    skip_confirm = opts[:yes] == true
+
+    if skip_confirm or confirm_delete(project_id) do
+      case Project.delete_folder(project_id) do
+        :ok ->
+          print_success("Deleted project: #{project_id}")
+
+        {:error, :project_not_found} ->
+          print_error("Project not found: #{project_id}")
+          halt_with_error(1)
+
+        {:error, reason} ->
+          print_error("Failed to delete project: #{inspect(reason)}")
+          halt_with_error(1)
+      end
+    else
+      print_info("Cancelled")
+    end
+  end
+
+  defp confirm_delete(project_id) do
+    IO.puts("About to delete project: #{project_id}")
+    IO.puts("This will remove all project files permanently.")
+    IO.puts("")
+    response = IO.gets("Are you sure? [y/N] ") |> String.trim() |> String.downcase()
+    response in ["y", "yes"]
+  end
+
+  defp print_project_info(project, projects_dir) do
+    project_file = Path.join([projects_dir, project, "project.json"])
+    legacy_file = Path.join([projects_dir, project, "session.json"])
+
+    file_to_load = if File.exists?(project_file), do: project_file, else: legacy_file
+    {state, task} = load_project_metadata(file_to_load)
+    print_project(project, state, task)
+  end
+
+  defp load_project_metadata(project_file) do
+    with true <- File.exists?(project_file),
+         {:ok, content} <- File.read(project_file),
          {:ok, data} <- Jason.decode(content) do
       state = data["state"] || "unknown"
       task = String.slice(data["task"] || "No task", 0, 60)
@@ -358,17 +489,17 @@ defmodule Albedo.CLI do
     end
   end
 
-  defp cmd_show(session_id) do
+  defp cmd_show(project_id) do
     print_header()
     config = Config.load!()
-    session_path = Path.join(Config.session_dir(config), session_id)
+    project_path = Path.join(Config.projects_dir(config), project_id)
 
-    unless File.dir?(session_path) do
-      print_error("Session not found: #{session_id}")
+    unless File.dir?(project_path) do
+      print_error("Project not found: #{project_id}")
       halt_with_error(1)
     end
 
-    feature_file = Path.join(session_path, "FEATURE.md")
+    feature_file = Path.join(project_path, "FEATURE.md")
 
     if File.exists?(feature_file) do
       case File.read(feature_file) do
@@ -379,28 +510,28 @@ defmodule Albedo.CLI do
           print_error("Failed to read FEATURE.md: #{inspect(reason)}")
       end
     else
-      print_info("Session #{session_id} does not have a FEATURE.md yet.")
-      print_info("The session may be incomplete. Try 'albedo resume #{session_path}'")
+      print_info("Project #{project_id} does not have a FEATURE.md yet.")
+      print_info("The project may be incomplete. Try 'albedo resume #{project_path}'")
     end
   end
 
-  defp cmd_replan(session_path, opts) do
+  defp cmd_replan(project_path, opts) do
     print_header()
-    session_path = Path.expand(session_path)
+    project_path = Path.expand(project_path)
 
-    unless File.dir?(session_path) do
-      print_error("Session not found at: #{session_path}")
+    unless File.dir?(project_path) do
+      print_error("Project not found at: #{project_path}")
       halt_with_error(1)
     end
 
     scope = opts[:scope] || "full"
-    print_info("Re-planning session: #{session_path}")
+    print_info("Re-planning project: #{project_path}")
     print_info("Scope: #{scope}")
 
-    case Session.replan(session_path, opts) do
-      {:ok, session_id, result} ->
+    case Project.replan(project_path, opts) do
+      {:ok, project_id, result} ->
         print_success("\nRe-planning complete!")
-        print_info("Session: #{session_id}")
+        print_info("Project: #{project_id}")
         print_info("Output: #{result.output_path}")
         print_summary(result)
 
@@ -444,17 +575,17 @@ defmodule Albedo.CLI do
 
     greenfield_opts = Keyword.merge(opts, greenfield: true)
 
-    case Session.start_greenfield(project_name, task, greenfield_opts) do
-      {:ok, session_id, result} ->
+    case Project.start_greenfield(project_name, task, greenfield_opts) do
+      {:ok, project_id, result} ->
         print_success("\nPlanning complete!")
-        print_info("Session: #{session_id}")
+        print_info("Project: #{project_id}")
         print_info("Output: #{result.output_path}")
         print_greenfield_summary(result)
 
-      {:error, {:phase_failed, session_id, session_dir}} ->
+      {:error, {:phase_failed, project_id, project_dir}} ->
         print_error("Planning failed during a phase")
-        print_info("Session: #{session_id}")
-        print_info("You can retry with: albedo resume #{session_dir}")
+        print_info("Project: #{project_id}")
+        print_info("You can retry with: albedo resume #{project_dir}")
         halt_with_error(1)
 
       {:error, reason} ->
@@ -490,7 +621,7 @@ defmodule Albedo.CLI do
 
     IO.puts("")
     IO.puts("  Config:     #{Config.config_file()}")
-    IO.puts("  Sessions:   #{Config.sessions_dir()}")
+    IO.puts("  Projects:   #{Config.projects_dir()}")
   end
 
   defp cmd_config(["set-provider" | _]) do
@@ -620,14 +751,14 @@ defmodule Albedo.CLI do
     end
   end
 
-  defp cmd_path(session_id) do
+  defp cmd_path(project_id) do
     config = Config.load!()
-    session_path = Path.join(Config.session_dir(config), session_id)
+    project_path = Path.join(Config.projects_dir(config), project_id)
 
-    if File.dir?(session_path) do
-      IO.puts(session_path)
+    if File.dir?(project_path) do
+      IO.puts(project_path)
     else
-      IO.puts(:stderr, "Session not found: #{session_id}")
+      IO.puts(:stderr, "Project not found: #{project_id}")
       halt_with_error(1)
     end
   end
@@ -638,7 +769,7 @@ defmodule Albedo.CLI do
 
   defp cmd_tickets(["list" | _], opts) do
     print_header()
-    session_dir = resolve_session_dir(opts)
+    session_dir = resolve_project_dir(opts)
 
     case Tickets.load(session_dir) do
       {:ok, data} ->
@@ -646,7 +777,7 @@ defmodule Albedo.CLI do
         print_ticket_list(data, tickets)
 
       {:error, :not_found} ->
-        print_error("No tickets.json found for this session")
+        print_error("No tickets.json found for this project")
         print_info("Run 'albedo analyze' first to generate tickets")
         halt_with_error(1)
 
@@ -658,7 +789,7 @@ defmodule Albedo.CLI do
 
   defp cmd_tickets(["show", id | _], opts) do
     print_header()
-    session_dir = resolve_session_dir(opts)
+    session_dir = resolve_project_dir(opts)
 
     with {:ok, data} <- load_tickets_data(session_dir),
          {:ok, ticket} <- fetch_ticket(data, id) do
@@ -707,8 +838,8 @@ defmodule Albedo.CLI do
     print_error("Unknown tickets subcommand: #{unknown}")
     IO.puts("")
     IO.puts("Available subcommands:")
-    IO.puts("  albedo tickets                  List tickets from most recent session")
-    IO.puts("  albedo tickets --session <id>   List tickets from specific session")
+    IO.puts("  albedo tickets                  List tickets from most recent project")
+    IO.puts("  albedo tickets --project <id>   List tickets from specific project")
     IO.puts("  albedo tickets --status pending Filter by status")
     IO.puts("  albedo tickets show <id>        Show ticket details")
     IO.puts("  albedo tickets add \"title\"      Add new ticket")
@@ -735,7 +866,7 @@ defmodule Albedo.CLI do
   end
 
   defp update_ticket_status(id, action, opts) do
-    session_dir = resolve_session_dir(opts)
+    session_dir = resolve_project_dir(opts)
 
     with {:ok, data} <- load_tickets_data(session_dir),
          {:ok, updated_data, ticket} <- apply_ticket_action(data, id, action),
@@ -745,7 +876,7 @@ defmodule Albedo.CLI do
   end
 
   defp reset_all_tickets(opts) do
-    session_dir = resolve_session_dir(opts)
+    session_dir = resolve_project_dir(opts)
 
     with {:ok, data} <- load_tickets_data(session_dir),
          :ok <- save_tickets_data(session_dir, Tickets.reset_all(data)) do
@@ -759,7 +890,7 @@ defmodule Albedo.CLI do
         {:ok, data}
 
       {:error, :not_found} ->
-        print_error("No tickets.json found for this session")
+        print_error("No tickets.json found for this project")
         halt_with_error(1)
 
       {:error, reason} ->
@@ -835,7 +966,7 @@ defmodule Albedo.CLI do
   end
 
   defp add_ticket(title, opts) do
-    session_dir = resolve_session_dir(opts)
+    session_dir = resolve_project_dir(opts)
 
     attrs = %{
       title: title,
@@ -873,7 +1004,7 @@ defmodule Albedo.CLI do
         {:ok, data}
 
       {:error, :not_found} ->
-        print_error("No tickets.json found for this session")
+        print_error("No tickets.json found for this project")
         print_info("Run 'albedo analyze' first to generate tickets")
         halt_with_error(1)
 
@@ -909,7 +1040,7 @@ defmodule Albedo.CLI do
   end
 
   defp delete_tickets(ids, opts) do
-    session_dir = resolve_session_dir(opts)
+    session_dir = resolve_project_dir(opts)
     skip_confirm = opts[:yes] == true
 
     {:ok, data} = load_tickets_or_error(session_dir)
@@ -967,7 +1098,7 @@ defmodule Albedo.CLI do
       halt_with_error(1)
     end
 
-    session_dir = resolve_session_dir(opts)
+    session_dir = resolve_project_dir(opts)
     {:ok, data} = load_tickets_or_error(session_dir)
 
     case Tickets.edit(data, id, changes) do
@@ -1037,7 +1168,7 @@ defmodule Albedo.CLI do
 
   defp export_tickets(opts) do
     print_header()
-    session_dir = resolve_session_dir(opts)
+    session_dir = resolve_project_dir(opts)
 
     with {:ok, format} <- parse_export_format(opts[:format] || "json"),
          {:ok, data} <- load_tickets_data(session_dir),
@@ -1087,30 +1218,30 @@ defmodule Albedo.CLI do
     end
   end
 
-  defp resolve_session_dir(opts) do
-    case opts[:session] do
+  defp resolve_project_dir(opts) do
+    case opts[:project] || opts[:session] do
       nil ->
         config = Config.load!()
-        sessions_dir = Config.session_dir(config)
+        projects_dir = Config.projects_dir(config)
 
-        case File.ls(sessions_dir) do
-          {:ok, sessions} when sessions != [] ->
-            most_recent = sessions |> Enum.sort(:desc) |> List.first()
-            Path.join(sessions_dir, most_recent)
+        case File.ls(projects_dir) do
+          {:ok, projects} when projects != [] ->
+            most_recent = projects |> Enum.sort(:desc) |> List.first()
+            Path.join(projects_dir, most_recent)
 
           _ ->
-            print_error("No sessions found")
+            print_error("No projects found")
             halt_with_error(1)
         end
 
-      session_id ->
+      project_id ->
         config = Config.load!()
-        Path.join(Config.session_dir(config), session_id)
+        Path.join(Config.projects_dir(config), project_id)
     end
   end
 
   defp print_ticket_list(data, tickets) do
-    IO.puts("Session: #{data.session_id}")
+    IO.puts("Project: #{data.project_id || data.session_id}")
     IO.puts("Task: #{String.slice(data.task_description || "", 0, 60)}")
     print_separator()
     IO.puts("")
@@ -1401,7 +1532,7 @@ defmodule Albedo.CLI do
     end
   end
 
-  defp print_session(id, state, task) do
+  defp print_project(id, state, task) do
     state_color =
       case state do
         "completed" -> :green
@@ -1476,9 +1607,9 @@ defmodule Albedo.CLI do
   defp print_next_steps(result) do
     IO.puts("")
     Owl.IO.puts(Owl.Data.tag("Next Steps:", :cyan))
-    IO.puts("  1. View the plan:        albedo show #{result.session_id}")
-    IO.puts("  2. Manage tickets:       albedo tickets --session #{result.session_id}")
-    IO.puts("  3. Go to session folder: cd $(albedo path #{result.session_id})")
+    IO.puts("  1. View the plan:        albedo show #{result.project_id}")
+    IO.puts("  2. Manage tickets:       albedo tickets --project #{result.project_id}")
+    IO.puts("  3. Go to project folder: cd $(albedo path #{result.project_id})")
   end
 
   defp print_invalid_args(invalid) do
@@ -1499,13 +1630,13 @@ defmodule Albedo.CLI do
           init                    Initialize configuration (first-time setup)
           analyze <path>          Analyze a codebase with a task
           plan                    Plan a new project from scratch (greenfield)
-          resume <session_path>   Resume an incomplete session
-          sessions                List recent sessions
-          show <session_id>       View a session's output
+          resume <project_path>   Resume an incomplete project
+          projects [subcommand]   Manage projects (list, create, rename, delete)
+          show <project_id>       View a project's output
           tickets [subcommand]    Manage tickets (list, show, start, done, reset)
           tui                     Interactive terminal UI (use 'albedo-tui' command)
-          path <session_id>       Print session path (use with cd)
-          replan <session_path>   Re-run planning phase with different parameters
+          path <project_id>       Print project path (use with cd)
+          replan <project_path>   Re-run planning phase with different parameters
           config [subcommand]     Manage configuration (show, set-provider, set-key)
 
       """,
@@ -1514,7 +1645,7 @@ defmodule Albedo.CLI do
 
           -t, --task <desc>       Task description (required for analyze/plan)
           -n, --name <name>       Project name (required for plan)
-          -S, --session <name>    Custom session name (optional)
+          -P, --project <name>    Custom project name (optional)
           --stack <stack>         Tech stack: phoenix, rails, nextjs, fastapi, etc.
           --database <db>         Database: postgres, mysql, sqlite, mongodb
           -i, --interactive       Enable interactive clarifying questions
@@ -1528,26 +1659,29 @@ defmodule Albedo.CLI do
 
           # Analyze existing codebase
           albedo analyze ~/projects/myapp --task "Add user authentication"
-          albedo analyze . -t "Add auth" --session auth-feature
+          albedo analyze . -t "Add auth" --project auth-feature
 
           # Plan new project from scratch
           albedo plan --name my_todo --task "Build a todo app with user accounts"
-          albedo plan -n shop_api -t "E-commerce API" --stack phoenix -S shop-v1
+          albedo plan -n shop_api -t "E-commerce API" --stack phoenix -P shop-v1
 
           # Configuration management
           albedo config                    # Show current config
           albedo config set-provider       # Change LLM provider
           albedo config set-key            # Set API key
 
-          # Session management
-          albedo sessions
+          # Project management
+          albedo projects                      # List all projects
+          albedo projects create "Add auth"   # Create new project folder
+          albedo projects rename old-id new   # Rename project folder
+          albedo projects delete old-id       # Delete project folder
           albedo show auth-feature
           cd $(albedo path auth-feature)
-          albedo resume ~/.albedo/sessions/auth-feature/
+          albedo resume ~/.albedo/projects/auth-feature/
 
           # Ticket management
-          albedo tickets                    # List tickets from latest session
-          albedo tickets --session my-session
+          albedo tickets                    # List tickets from latest project
+          albedo tickets --project my-project
           albedo tickets --status pending   # Filter by status
           albedo tickets show 1             # Show ticket details
           albedo tickets start 1            # Start working on ticket
@@ -1566,7 +1700,7 @@ defmodule Albedo.CLI do
       """
 
           Config file: ~/.albedo/config.toml
-          Sessions:    ~/.albedo/sessions/
+          Projects:    ~/.albedo/projects/
       """
     ])
   end

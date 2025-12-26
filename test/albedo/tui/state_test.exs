@@ -8,38 +8,38 @@ defmodule Albedo.TUI.StateTest do
     test "creates a new state with defaults" do
       state = State.new()
 
-      assert state.session_dir == nil
+      assert state.project_dir == nil
       assert state.data == nil
-      assert state.sessions == []
-      assert state.current_session == 0
+      assert state.projects == []
+      assert state.current_project == 0
       assert state.selected_ticket == 0
-      assert state.active_panel == :sessions
+      assert state.active_panel == :projects
       assert state.mode == :normal
       assert state.quit == false
     end
 
-    test "accepts session_dir option" do
-      state = State.new(session_dir: "/tmp/test")
+    test "accepts project_dir option" do
+      state = State.new(project_dir: "/tmp/test")
 
-      assert state.session_dir == "/tmp/test"
+      assert state.project_dir == "/tmp/test"
     end
   end
 
   describe "move_up/1" do
-    test "decrements current_session when in sessions panel" do
-      state = %State{State.new() | current_session: 2, active_panel: :sessions}
+    test "decrements current_project when in projects panel" do
+      state = %State{State.new() | current_project: 2, active_panel: :projects}
 
       result = State.move_up(state)
 
-      assert result.current_session == 1
+      assert result.current_project == 1
     end
 
-    test "does not go below 0 for sessions" do
-      state = %State{State.new() | current_session: 0, active_panel: :sessions}
+    test "does not go below 0 for projects" do
+      state = %State{State.new() | current_project: 0, active_panel: :projects}
 
       result = State.move_up(state)
 
-      assert result.current_session == 0
+      assert result.current_project == 0
     end
 
     test "decrements selected_ticket when in tickets panel with data" do
@@ -61,34 +61,34 @@ defmodule Albedo.TUI.StateTest do
   end
 
   describe "move_down/1" do
-    test "increments current_session when in sessions panel" do
-      sessions = [%{id: "a"}, %{id: "b"}, %{id: "c"}]
+    test "increments current_project when in projects panel" do
+      projects = [%{id: "a"}, %{id: "b"}, %{id: "c"}]
 
       state = %State{
         State.new()
-        | current_session: 0,
-          active_panel: :sessions,
-          sessions: sessions
+        | current_project: 0,
+          active_panel: :projects,
+          projects: projects
       }
 
       result = State.move_down(state)
 
-      assert result.current_session == 1
+      assert result.current_project == 1
     end
 
-    test "does not exceed session count" do
-      sessions = [%{id: "a"}, %{id: "b"}]
+    test "does not exceed project count" do
+      projects = [%{id: "a"}, %{id: "b"}]
 
       state = %State{
         State.new()
-        | current_session: 1,
-          active_panel: :sessions,
-          sessions: sessions
+        | current_project: 1,
+          active_panel: :projects,
+          projects: projects
       }
 
       result = State.move_down(state)
 
-      assert result.current_session == 1
+      assert result.current_project == 1
     end
 
     test "increments selected_ticket when in tickets panel with data" do
@@ -111,39 +111,39 @@ defmodule Albedo.TUI.StateTest do
   end
 
   describe "next_panel/1" do
-    test "cycles sessions -> tickets -> detail -> sessions" do
+    test "cycles projects -> tickets -> detail -> projects" do
       state = State.new()
 
-      assert state.active_panel == :sessions
+      assert state.active_panel == :projects
       assert State.next_panel(state).active_panel == :tickets
       assert State.next_panel(State.next_panel(state)).active_panel == :detail
-      assert State.next_panel(State.next_panel(State.next_panel(state))).active_panel == :sessions
+      assert State.next_panel(State.next_panel(State.next_panel(state))).active_panel == :projects
     end
   end
 
   describe "prev_panel/1" do
-    test "cycles sessions -> detail -> tickets -> sessions" do
+    test "cycles projects -> detail -> tickets -> projects" do
       state = State.new()
 
-      assert state.active_panel == :sessions
+      assert state.active_panel == :projects
       assert State.prev_panel(state).active_panel == :detail
       assert State.prev_panel(State.prev_panel(state)).active_panel == :tickets
-      assert State.prev_panel(State.prev_panel(State.prev_panel(state))).active_panel == :sessions
+      assert State.prev_panel(State.prev_panel(State.prev_panel(state))).active_panel == :projects
     end
   end
 
-  describe "current_session/1" do
-    test "returns the currently selected session" do
-      sessions = [%{id: "a"}, %{id: "b"}]
-      state = %State{State.new() | sessions: sessions, current_session: 1}
+  describe "current_project/1" do
+    test "returns the currently selected project" do
+      projects = [%{id: "a"}, %{id: "b"}]
+      state = %State{State.new() | projects: projects, current_project: 1}
 
-      assert State.current_session(state) == %{id: "b"}
+      assert State.current_project(state) == %{id: "b"}
     end
 
-    test "returns nil when no sessions" do
+    test "returns nil when no projects" do
       state = State.new()
 
-      assert State.current_session(state) == nil
+      assert State.current_project(state) == nil
     end
   end
 
@@ -478,10 +478,10 @@ defmodule Albedo.TUI.StateTest do
     test "enter_input_mode sets mode to :input with prompt" do
       state = State.new()
 
-      result = State.enter_input_mode(state, :new_session, "Enter task: ")
+      result = State.enter_input_mode(state, :new_project, "Enter task: ")
 
       assert result.mode == :input
-      assert result.input_mode == :new_session
+      assert result.input_mode == :new_project
       assert result.input_prompt == "Enter task: "
       assert result.input_buffer == ""
       assert result.input_cursor == 0
@@ -491,7 +491,7 @@ defmodule Albedo.TUI.StateTest do
       state = %State{
         State.new()
         | mode: :input,
-          input_mode: :new_session,
+          input_mode: :new_project,
           input_prompt: "Enter task: ",
           input_buffer: "test",
           input_cursor: 4
@@ -570,18 +570,18 @@ defmodule Albedo.TUI.StateTest do
     test "enter_confirm_mode sets mode to :confirm with action and message" do
       state = State.new()
 
-      result = State.enter_confirm_mode(state, :delete_session, "Delete session? (y/n)")
+      result = State.enter_confirm_mode(state, :delete_project, "Delete project? (y/n)")
 
       assert result.mode == :confirm
-      assert result.confirm_action == :delete_session
-      assert result.confirm_message == "Delete session? (y/n)"
+      assert result.confirm_action == :delete_project
+      assert result.confirm_message == "Delete project? (y/n)"
     end
 
     test "exit_confirm_mode resets confirm state" do
       state = %State{
         State.new()
         | mode: :confirm,
-          confirm_action: :delete_session,
+          confirm_action: :delete_project,
           confirm_message: "Delete?"
       }
 
@@ -593,105 +593,105 @@ defmodule Albedo.TUI.StateTest do
     end
   end
 
-  describe "load_sessions/2" do
+  describe "load_projects/2" do
     setup do
       test_dir = Path.join(System.tmp_dir!(), "albedo_test_#{System.unique_integer([:positive])}")
       File.mkdir_p!(test_dir)
 
       on_exit(fn -> File.rm_rf!(test_dir) end)
 
-      {:ok, sessions_dir: test_dir}
+      {:ok, projects_dir: test_dir}
     end
 
-    test "loads sessions from directory", %{sessions_dir: sessions_dir} do
-      session_dir = Path.join(sessions_dir, "test-session")
-      File.mkdir_p!(session_dir)
+    test "loads projects from directory", %{projects_dir: projects_dir} do
+      project_dir = Path.join(projects_dir, "test-project")
+      File.mkdir_p!(project_dir)
 
-      session_data = %{"state" => "planning", "task" => "Test task description"}
-      File.write!(Path.join(session_dir, "session.json"), Jason.encode!(session_data))
+      project_data = %{"state" => "planning", "task" => "Test task description"}
+      File.write!(Path.join(project_dir, "project.json"), Jason.encode!(project_data))
 
       state = State.new()
 
-      result = State.load_sessions(state, sessions_dir)
+      result = State.load_projects(state, projects_dir)
 
-      assert length(result.sessions) == 1
-      assert result.sessions_dir == sessions_dir
-      assert hd(result.sessions).id == "test-session"
-      assert hd(result.sessions).state == "planning"
-      assert hd(result.sessions).task == "Test task description"
+      assert length(result.projects) == 1
+      assert result.projects_dir == projects_dir
+      assert hd(result.projects).id == "test-project"
+      assert hd(result.projects).state == "planning"
+      assert hd(result.projects).task == "Test task description"
     end
 
-    test "returns empty list when directory does not exist", %{sessions_dir: sessions_dir} do
-      nonexistent_dir = Path.join(sessions_dir, "nonexistent")
+    test "returns empty list when directory does not exist", %{projects_dir: projects_dir} do
+      nonexistent_dir = Path.join(projects_dir, "nonexistent")
       state = State.new()
 
-      result = State.load_sessions(state, nonexistent_dir)
+      result = State.load_projects(state, nonexistent_dir)
 
-      assert result.sessions == []
-      assert result.sessions_dir == nonexistent_dir
+      assert result.projects == []
+      assert result.projects_dir == nonexistent_dir
     end
 
-    test "ignores hidden directories", %{sessions_dir: sessions_dir} do
-      hidden_dir = Path.join(sessions_dir, ".hidden-session")
+    test "ignores hidden directories", %{projects_dir: projects_dir} do
+      hidden_dir = Path.join(projects_dir, ".hidden-project")
       File.mkdir_p!(hidden_dir)
-      File.write!(Path.join(hidden_dir, "session.json"), "{}")
+      File.write!(Path.join(hidden_dir, "project.json"), "{}")
 
-      visible_dir = Path.join(sessions_dir, "visible-session")
+      visible_dir = Path.join(projects_dir, "visible-project")
       File.mkdir_p!(visible_dir)
-      File.write!(Path.join(visible_dir, "session.json"), "{}")
+      File.write!(Path.join(visible_dir, "project.json"), "{}")
 
       state = State.new()
 
-      result = State.load_sessions(state, sessions_dir)
+      result = State.load_projects(state, projects_dir)
 
-      assert length(result.sessions) == 1
-      assert hd(result.sessions).id == "visible-session"
+      assert length(result.projects) == 1
+      assert hd(result.projects).id == "visible-project"
     end
 
-    test "ignores directories without session.json", %{sessions_dir: sessions_dir} do
-      no_session_dir = Path.join(sessions_dir, "no-session")
-      File.mkdir_p!(no_session_dir)
+    test "ignores directories without project.json", %{projects_dir: projects_dir} do
+      no_project_dir = Path.join(projects_dir, "no-project")
+      File.mkdir_p!(no_project_dir)
 
-      with_session_dir = Path.join(sessions_dir, "with-session")
-      File.mkdir_p!(with_session_dir)
-      File.write!(Path.join(with_session_dir, "session.json"), "{}")
+      with_project_dir = Path.join(projects_dir, "with-project")
+      File.mkdir_p!(with_project_dir)
+      File.write!(Path.join(with_project_dir, "project.json"), "{}")
 
       state = State.new()
 
-      result = State.load_sessions(state, sessions_dir)
+      result = State.load_projects(state, projects_dir)
 
-      assert length(result.sessions) == 1
-      assert hd(result.sessions).id == "with-session"
+      assert length(result.projects) == 1
+      assert hd(result.projects).id == "with-project"
     end
 
-    test "sorts sessions in descending order", %{sessions_dir: sessions_dir} do
-      for name <- ["aaa-session", "zzz-session", "mmm-session"] do
-        dir = Path.join(sessions_dir, name)
+    test "sorts projects in descending order", %{projects_dir: projects_dir} do
+      for name <- ["aaa-project", "zzz-project", "mmm-project"] do
+        dir = Path.join(projects_dir, name)
         File.mkdir_p!(dir)
-        File.write!(Path.join(dir, "session.json"), "{}")
+        File.write!(Path.join(dir, "project.json"), "{}")
       end
 
       state = State.new()
 
-      result = State.load_sessions(state, sessions_dir)
+      result = State.load_projects(state, projects_dir)
 
-      ids = Enum.map(result.sessions, & &1.id)
-      assert ids == ["zzz-session", "mmm-session", "aaa-session"]
+      ids = Enum.map(result.projects, & &1.id)
+      assert ids == ["zzz-project", "mmm-project", "aaa-project"]
     end
 
-    test "truncates task to 50 characters", %{sessions_dir: sessions_dir} do
-      session_dir = Path.join(sessions_dir, "long-task-session")
-      File.mkdir_p!(session_dir)
+    test "truncates task to 50 characters", %{projects_dir: projects_dir} do
+      project_dir = Path.join(projects_dir, "long-task-project")
+      File.mkdir_p!(project_dir)
 
       long_task = String.duplicate("a", 100)
-      session_data = %{"task" => long_task}
-      File.write!(Path.join(session_dir, "session.json"), Jason.encode!(session_data))
+      project_data = %{"task" => long_task}
+      File.write!(Path.join(project_dir, "project.json"), Jason.encode!(project_data))
 
       state = State.new()
 
-      result = State.load_sessions(state, sessions_dir)
+      result = State.load_projects(state, projects_dir)
 
-      assert String.length(hd(result.sessions).task) == 50
+      assert String.length(hd(result.projects).task) == 50
     end
   end
 
@@ -702,93 +702,93 @@ defmodule Albedo.TUI.StateTest do
 
       on_exit(fn -> File.rm_rf!(test_dir) end)
 
-      {:ok, session_dir: test_dir}
+      {:ok, project_dir: test_dir}
     end
 
-    test "loads tickets from session directory", %{session_dir: session_dir} do
+    test "loads tickets from project directory", %{project_dir: project_dir} do
       tickets_data = %{
-        "session_id" => "test",
+        "project_id" => "test",
         "task_description" => "Test task",
         "tickets" => [
           %{"id" => "1", "title" => "Ticket 1", "status" => "pending"}
         ]
       }
 
-      File.write!(Path.join(session_dir, "tickets.json"), Jason.encode!(tickets_data))
+      File.write!(Path.join(project_dir, "tickets.json"), Jason.encode!(tickets_data))
 
       state = State.new()
 
-      {:ok, result} = State.load_tickets(state, session_dir)
+      {:ok, result} = State.load_tickets(state, project_dir)
 
-      assert result.session_dir == session_dir
+      assert result.project_dir == project_dir
       assert result.selected_ticket == 0
       assert length(result.data.tickets) == 1
     end
 
-    test "returns error when tickets file does not exist", %{session_dir: session_dir} do
+    test "returns error when tickets file does not exist", %{project_dir: project_dir} do
       state = State.new()
 
-      result = State.load_tickets(state, session_dir)
+      result = State.load_tickets(state, project_dir)
 
       assert {:error, _reason} = result
     end
   end
 
-  describe "session CRUD functions" do
-    test "delete_session removes current session from list" do
-      sessions = [%{id: "a", task: "task1"}, %{id: "b", task: "task2"}, %{id: "c", task: "task3"}]
-      state = %State{State.new() | sessions: sessions, current_session: 1}
+  describe "project CRUD functions" do
+    test "delete_project removes current project from list" do
+      projects = [%{id: "a", task: "task1"}, %{id: "b", task: "task2"}, %{id: "c", task: "task3"}]
+      state = %State{State.new() | projects: projects, current_project: 1}
 
-      result = State.delete_session(state)
+      result = State.delete_project(state)
 
-      assert length(result.sessions) == 2
-      assert Enum.at(result.sessions, 0).id == "a"
-      assert Enum.at(result.sessions, 1).id == "c"
+      assert length(result.projects) == 2
+      assert Enum.at(result.projects, 0).id == "a"
+      assert Enum.at(result.projects, 1).id == "c"
     end
 
-    test "delete_session adjusts current_session index when deleting last item" do
-      sessions = [%{id: "a"}, %{id: "b"}]
-      state = %State{State.new() | sessions: sessions, current_session: 1}
+    test "delete_project adjusts current_project index when deleting last item" do
+      projects = [%{id: "a"}, %{id: "b"}]
+      state = %State{State.new() | projects: projects, current_project: 1}
 
-      result = State.delete_session(state)
+      result = State.delete_project(state)
 
-      assert result.current_session == 0
+      assert result.current_project == 0
     end
 
-    test "delete_session handles empty list after deletion" do
-      sessions = [%{id: "a"}]
-      state = %State{State.new() | sessions: sessions, current_session: 0}
+    test "delete_project handles empty list after deletion" do
+      projects = [%{id: "a"}]
+      state = %State{State.new() | projects: projects, current_project: 0}
 
-      result = State.delete_session(state)
+      result = State.delete_project(state)
 
-      assert result.sessions == []
-      assert result.current_session == 0
+      assert result.projects == []
+      assert result.current_project == 0
     end
 
-    test "update_session_task updates task of current session" do
-      sessions = [%{id: "a", task: "old task"}, %{id: "b", task: "other"}]
-      state = %State{State.new() | sessions: sessions, current_session: 0}
+    test "update_project_task updates task of current project" do
+      projects = [%{id: "a", task: "old task"}, %{id: "b", task: "other"}]
+      state = %State{State.new() | projects: projects, current_project: 0}
 
-      result = State.update_session_task(state, "new task")
+      result = State.update_project_task(state, "new task")
 
-      assert Enum.at(result.sessions, 0).task == "new task"
-      assert Enum.at(result.sessions, 1).task == "other"
+      assert Enum.at(result.projects, 0).task == "new task"
+      assert Enum.at(result.projects, 1).task == "other"
     end
 
-    test "update_session_task truncates long task to 50 chars" do
-      sessions = [%{id: "a", task: "old"}]
-      state = %State{State.new() | sessions: sessions, current_session: 0}
+    test "update_project_task truncates long task to 50 chars" do
+      projects = [%{id: "a", task: "old"}]
+      state = %State{State.new() | projects: projects, current_project: 0}
       long_task = String.duplicate("a", 100)
 
-      result = State.update_session_task(state, long_task)
+      result = State.update_project_task(state, long_task)
 
-      assert String.length(Enum.at(result.sessions, 0).task) == 50
+      assert String.length(Enum.at(result.projects, 0).task) == 50
     end
   end
 
   defp build_tickets_data(tickets) do
     %{
-      session_id: "test-session",
+      project_id: "test-project",
       task_description: "Test task",
       tickets: tickets,
       summary: %{
