@@ -324,46 +324,37 @@ defmodule Albedo.CLI do
     sessions_dir = Config.session_dir(config)
 
     case File.ls(sessions_dir) do
+      {:ok, []} ->
+        print_info("No sessions found.")
+
       {:ok, sessions} ->
-        sessions = Enum.sort(sessions, :desc)
-
-        if Enum.empty?(sessions) do
-          print_info("No sessions found.")
-        else
-          print_info("Recent sessions:")
-          print_separator()
-
-          Enum.each(sessions, fn session ->
-            session_file = Path.join([sessions_dir, session, "session.json"])
-
-            if File.exists?(session_file) do
-              case File.read(session_file) do
-                {:ok, content} ->
-                  case Jason.decode(content) do
-                    {:ok, data} ->
-                      state = data["state"] || "unknown"
-                      task = data["task"] || "No task"
-                      task = String.slice(task, 0, 60)
-                      print_session(session, state, task)
-
-                    _ ->
-                      print_session(session, "?", "")
-                  end
-
-                _ ->
-                  print_session(session, "?", "")
-              end
-            else
-              print_session(session, "?", "")
-            end
-          end)
-        end
+        print_info("Recent sessions:")
+        print_separator()
+        sessions |> Enum.sort(:desc) |> Enum.each(&print_session_info(&1, sessions_dir))
 
       {:error, :enoent} ->
         print_info("No sessions directory found. Run 'albedo init' first.")
 
       {:error, reason} ->
         print_error("Failed to list sessions: #{inspect(reason)}")
+    end
+  end
+
+  defp print_session_info(session, sessions_dir) do
+    session_file = Path.join([sessions_dir, session, "session.json"])
+    {state, task} = load_session_metadata(session_file)
+    print_session(session, state, task)
+  end
+
+  defp load_session_metadata(session_file) do
+    with true <- File.exists?(session_file),
+         {:ok, content} <- File.read(session_file),
+         {:ok, data} <- Jason.decode(content) do
+      state = data["state"] || "unknown"
+      task = String.slice(data["task"] || "No task", 0, 60)
+      {state, task}
+    else
+      _ -> {"?", ""}
     end
   end
 
@@ -573,22 +564,7 @@ defmodule Albedo.CLI do
       IO.puts("")
 
       confirm = IO.gets("Proceed? [Y/n]: ") |> String.trim() |> String.downcase()
-
-      if confirm in ["", "y", "yes"] do
-        case append_to_shell_profile(shell_profile, env_var, export_line) do
-          {:ok, :replaced} ->
-            print_success("Replaced #{env_var} in #{shell_profile}")
-            IO.puts("")
-            print_info("Run: source #{shell_profile}")
-
-          {:ok, :added} ->
-            print_success("Added #{env_var} to #{shell_profile}")
-            IO.puts("")
-            print_info("Run: source #{shell_profile}")
-        end
-      else
-        print_info("Cancelled.")
-      end
+      handle_set_key_confirm(confirm, shell_profile, env_var, export_line)
     end
   end
 
@@ -600,6 +576,24 @@ defmodule Albedo.CLI do
     IO.puts("  albedo config set-provider Select LLM provider")
     IO.puts("  albedo config set-key      Set API key for current provider")
     halt_with_error(1)
+  end
+
+  defp handle_set_key_confirm(confirm, shell_profile, env_var, export_line)
+       when confirm in ["", "y", "yes"] do
+    case append_to_shell_profile(shell_profile, env_var, export_line) do
+      {:ok, :replaced} -> print_shell_update_success("Replaced", env_var, shell_profile)
+      {:ok, :added} -> print_shell_update_success("Added", env_var, shell_profile)
+    end
+  end
+
+  defp handle_set_key_confirm(_, _, _, _) do
+    print_info("Cancelled.")
+  end
+
+  defp print_shell_update_success(action, env_var, shell_profile) do
+    print_success("#{action} #{env_var} in #{shell_profile}")
+    IO.puts("")
+    print_info("Run: source #{shell_profile}")
   end
 
   defp cmd_tui do
@@ -666,28 +660,9 @@ defmodule Albedo.CLI do
     print_header()
     session_dir = resolve_session_dir(opts)
 
-    case Tickets.load(session_dir) do
-      {:ok, data} ->
-        case Tickets.get(data, id) do
-          nil ->
-            print_error("Ticket ##{id} not found")
-            halt_with_error(1)
-
-          ticket ->
-            if opts[:json] do
-              ticket |> Tickets.Ticket.to_json() |> Jason.encode!(pretty: true) |> IO.puts()
-            else
-              print_ticket_detail(ticket)
-            end
-        end
-
-      {:error, :not_found} ->
-        print_error("No tickets.json found for this session")
-        halt_with_error(1)
-
-      {:error, reason} ->
-        print_error("Failed to load tickets: #{inspect(reason)}")
-        halt_with_error(1)
+    with {:ok, data} <- load_tickets_data(session_dir),
+         {:ok, ticket} <- fetch_ticket(data, id) do
+      display_ticket(ticket, opts)
     end
   end
 
@@ -751,40 +726,37 @@ defmodule Albedo.CLI do
     halt_with_error(1)
   end
 
+  defp display_ticket(ticket, opts) do
+    if opts[:json] do
+      ticket |> Tickets.Ticket.to_json() |> Jason.encode!(pretty: true) |> IO.puts()
+    else
+      print_ticket_detail(ticket)
+    end
+  end
+
   defp update_ticket_status(id, action, opts) do
     session_dir = resolve_session_dir(opts)
 
+    with {:ok, data} <- load_tickets_data(session_dir),
+         {:ok, updated_data, ticket} <- apply_ticket_action(data, id, action),
+         :ok <- save_tickets_data(session_dir, updated_data) do
+      print_success("Ticket ##{id} #{action_label(action)}: #{ticket.title}")
+    end
+  end
+
+  defp reset_all_tickets(opts) do
+    session_dir = resolve_session_dir(opts)
+
+    with {:ok, data} <- load_tickets_data(session_dir),
+         :ok <- save_tickets_data(session_dir, Tickets.reset_all(data)) do
+      print_success("All tickets reset to pending")
+    end
+  end
+
+  defp load_tickets_data(session_dir) do
     case Tickets.load(session_dir) do
       {:ok, data} ->
-        action_fn =
-          case action do
-            :start -> &Tickets.start/2
-            :complete -> &Tickets.complete/2
-            :reset -> &Tickets.reset/2
-          end
-
-        case action_fn.(data, id) do
-          {:ok, updated_data, ticket} ->
-            case Tickets.save(session_dir, updated_data) do
-              :ok ->
-                action_str =
-                  case action do
-                    :start -> "started"
-                    :complete -> "completed"
-                    :reset -> "reset"
-                  end
-
-                print_success("Ticket ##{id} #{action_str}: #{ticket.title}")
-
-              {:error, reason} ->
-                print_error("Failed to save: #{inspect(reason)}")
-                halt_with_error(1)
-            end
-
-          {:error, :not_found} ->
-            print_error("Ticket ##{id} not found")
-            halt_with_error(1)
-        end
+        {:ok, data}
 
       {:error, :not_found} ->
         print_error("No tickets.json found for this session")
@@ -796,28 +768,45 @@ defmodule Albedo.CLI do
     end
   end
 
-  defp reset_all_tickets(opts) do
-    session_dir = resolve_session_dir(opts)
-
-    case Tickets.load(session_dir) do
-      {:ok, data} ->
-        updated_data = Tickets.reset_all(data)
-
-        case Tickets.save(session_dir, updated_data) do
-          :ok ->
-            print_success("All tickets reset to pending")
-
-          {:error, reason} ->
-            print_error("Failed to save: #{inspect(reason)}")
-            halt_with_error(1)
-        end
-
-      {:error, :not_found} ->
-        print_error("No tickets.json found for this session")
+  defp fetch_ticket(data, id) do
+    case Tickets.get(data, id) do
+      nil ->
+        print_error("Ticket ##{id} not found")
         halt_with_error(1)
 
+      ticket ->
+        {:ok, ticket}
+    end
+  end
+
+  defp apply_ticket_action(data, id, action) do
+    action_fn = get_action_fn(action)
+
+    case action_fn.(data, id) do
+      {:ok, _, _} = result ->
+        result
+
+      {:error, :not_found} ->
+        print_error("Ticket ##{id} not found")
+        halt_with_error(1)
+    end
+  end
+
+  defp get_action_fn(:start), do: &Tickets.start/2
+  defp get_action_fn(:complete), do: &Tickets.complete/2
+  defp get_action_fn(:reset), do: &Tickets.reset/2
+
+  defp action_label(:start), do: "started"
+  defp action_label(:complete), do: "completed"
+  defp action_label(:reset), do: "reset"
+
+  defp save_tickets_data(session_dir, data) do
+    case Tickets.save(session_dir, data) do
+      :ok ->
+        :ok
+
       {:error, reason} ->
-        print_error("Failed to load tickets: #{inspect(reason)}")
+        print_error("Failed to save: #{inspect(reason)}")
         halt_with_error(1)
     end
   end
@@ -1050,65 +1039,50 @@ defmodule Albedo.CLI do
     print_header()
     session_dir = resolve_session_dir(opts)
 
-    format_str = opts[:format] || "json"
+    with {:ok, format} <- parse_export_format(opts[:format] || "json"),
+         {:ok, data} <- load_tickets_data(session_dir),
+         {:ok, content} <- do_export(data, format, opts) do
+      write_export_output(content, data, format, opts[:output])
+    end
+  end
 
-    format =
-      case format_str do
-        "json" ->
-          :json
+  defp parse_export_format("json"), do: {:ok, :json}
+  defp parse_export_format("csv"), do: {:ok, :csv}
+  defp parse_export_format("markdown"), do: {:ok, :markdown}
+  defp parse_export_format("md"), do: {:ok, :markdown}
+  defp parse_export_format("github"), do: {:ok, :github}
 
-        "csv" ->
-          :csv
+  defp parse_export_format(other) do
+    print_error("Unknown format: #{other}")
+    print_info("Available formats: json, csv, markdown, github")
+    halt_with_error(1)
+  end
 
-        "markdown" ->
-          :markdown
+  defp do_export(data, format, opts) do
+    export_opts = if opts[:status], do: [status: String.to_existing_atom(opts[:status])], else: []
 
-        "md" ->
-          :markdown
-
-        "github" ->
-          :github
-
-        other ->
-          print_error("Unknown format: #{other}")
-          print_info("Available formats: json, csv, markdown, github")
-          halt_with_error(1)
-      end
-
-    case Tickets.load(session_dir) do
-      {:ok, data} ->
-        export_opts =
-          if opts[:status], do: [status: String.to_existing_atom(opts[:status])], else: []
-
-        case Exporter.export(data, format, export_opts) do
-          {:ok, content} ->
-            output_path = opts[:output]
-
-            if output_path do
-              case File.write(output_path, content) do
-                :ok ->
-                  print_success("Exported #{length(data.tickets)} tickets to #{output_path}")
-                  print_info("Format: #{Exporter.format_name(format)}")
-
-                {:error, reason} ->
-                  print_error("Failed to write file: #{inspect(reason)}")
-                  halt_with_error(1)
-              end
-            else
-              IO.puts(content)
-            end
-
-          {:error, reason} ->
-            print_error("Export failed: #{inspect(reason)}")
-            halt_with_error(1)
-        end
-
-      {:error, :not_found} ->
-        print_error("No tickets.json found for this session")
-        halt_with_error(1)
+    case Exporter.export(data, format, export_opts) do
+      {:ok, content} ->
+        {:ok, content}
 
       {:error, reason} ->
-        print_error("Failed to load tickets: #{inspect(reason)}")
+        print_error("Export failed: #{inspect(reason)}")
+        halt_with_error(1)
+    end
+  end
+
+  defp write_export_output(content, _data, _format, nil) do
+    IO.puts(content)
+  end
+
+  defp write_export_output(content, data, format, output_path) do
+    case File.write(output_path, content) do
+      :ok ->
+        print_success("Exported #{length(data.tickets)} tickets to #{output_path}")
+        print_info("Format: #{Exporter.format_name(format)}")
+
+      {:error, reason} ->
+        print_error("Failed to write file: #{inspect(reason)}")
         halt_with_error(1)
     end
   end
@@ -1194,6 +1168,14 @@ defmodule Albedo.CLI do
   end
 
   defp print_ticket_detail(ticket) do
+    print_ticket_header(ticket)
+    print_ticket_status(ticket)
+    print_ticket_metadata(ticket)
+    print_ticket_sections(ticket)
+    print_ticket_dependencies(ticket)
+  end
+
+  defp print_ticket_header(ticket) do
     Owl.IO.puts([
       "Ticket #",
       Owl.Data.tag(ticket.id, :cyan),
@@ -1203,68 +1185,84 @@ defmodule Albedo.CLI do
 
     print_separator()
     IO.puts("")
+  end
 
-    status_color =
-      case ticket.status do
-        :completed -> :green
-        :in_progress -> :yellow
-        :pending -> :light_black
-      end
+  defp print_ticket_status(ticket) do
+    color = status_color(ticket.status)
 
     Owl.IO.puts([
       "Status:     ",
-      Owl.Data.tag("#{status_symbol(ticket.status)} #{ticket.status}", status_color)
+      Owl.Data.tag("#{status_symbol(ticket.status)} #{ticket.status}", color)
     ])
+  end
 
+  defp status_color(:completed), do: :green
+  defp status_color(:in_progress), do: :yellow
+  defp status_color(:pending), do: :light_black
+
+  defp print_ticket_metadata(ticket) do
     IO.puts("Type:       #{ticket.type}")
     IO.puts("Priority:   #{ticket.priority}")
+    print_optional_field("Estimate", ticket.estimate, &"#{&1} points")
+    print_optional_list("Labels", ticket.labels, &Enum.join(&1, ", "))
+    IO.puts("")
+  end
 
-    if ticket.estimate do
-      IO.puts("Estimate:   #{ticket.estimate} points")
-    end
+  defp print_ticket_sections(ticket) do
+    print_optional_section("Description", ticket.description, &IO.puts("  #{&1}"))
+    print_file_section("Files to Create", ticket.files.create)
+    print_file_section("Files to Modify", ticket.files.modify)
+    print_acceptance_criteria(ticket.acceptance_criteria)
+  end
 
-    if ticket.labels != [] do
-      IO.puts("Labels:     #{Enum.join(ticket.labels, ", ")}")
-    end
+  defp print_ticket_dependencies(ticket) do
+    print_optional_list_inline("Blocked by", ticket.dependencies.blocked_by, "#")
+    print_optional_list_inline("Blocks", ticket.dependencies.blocks, "#")
+  end
+
+  defp print_optional_field(_label, nil, _formatter), do: :ok
+
+  defp print_optional_field(label, value, formatter),
+    do: IO.puts("#{label}:   #{formatter.(value)}")
+
+  defp print_optional_list(_label, [], _formatter), do: :ok
+
+  defp print_optional_list(label, list, formatter),
+    do: IO.puts("#{label}:     #{formatter.(list)}")
+
+  defp print_optional_section(_title, nil, _printer), do: :ok
+
+  defp print_optional_section(title, content, printer) do
+    Owl.IO.puts(Owl.Data.tag("#{title}:", :cyan))
+    printer.(content)
+    IO.puts("")
+  end
+
+  defp print_file_section(_title, []), do: :ok
+
+  defp print_file_section(title, files) do
+    Owl.IO.puts(Owl.Data.tag("#{title}:", :cyan))
+    Enum.each(files, &IO.puts("  • #{&1}"))
+    IO.puts("")
+  end
+
+  defp print_acceptance_criteria([]), do: :ok
+
+  defp print_acceptance_criteria(criteria) do
+    Owl.IO.puts(Owl.Data.tag("Acceptance Criteria:", :cyan))
+
+    Enum.each(criteria, fn criterion ->
+      clean = String.replace(criterion, ~r/^\s*\[[ x~]\]\s*/, "")
+      IO.puts("  ☐ #{clean}")
+    end)
 
     IO.puts("")
+  end
 
-    if ticket.description do
-      Owl.IO.puts(Owl.Data.tag("Description:", :cyan))
-      IO.puts("  #{ticket.description}")
-      IO.puts("")
-    end
+  defp print_optional_list_inline(_label, [], _prefix), do: :ok
 
-    if ticket.files.create != [] do
-      Owl.IO.puts(Owl.Data.tag("Files to Create:", :cyan))
-      Enum.each(ticket.files.create, &IO.puts("  • #{&1}"))
-      IO.puts("")
-    end
-
-    if ticket.files.modify != [] do
-      Owl.IO.puts(Owl.Data.tag("Files to Modify:", :cyan))
-      Enum.each(ticket.files.modify, &IO.puts("  • #{&1}"))
-      IO.puts("")
-    end
-
-    if ticket.acceptance_criteria != [] do
-      Owl.IO.puts(Owl.Data.tag("Acceptance Criteria:", :cyan))
-
-      Enum.each(ticket.acceptance_criteria, fn criterion ->
-        clean_criterion = String.replace(criterion, ~r/^\s*\[[ x~]\]\s*/, "")
-        IO.puts("  ☐ #{clean_criterion}")
-      end)
-
-      IO.puts("")
-    end
-
-    if ticket.dependencies.blocked_by != [] do
-      IO.puts("Blocked by: ##{Enum.join(ticket.dependencies.blocked_by, ", #")}")
-    end
-
-    if ticket.dependencies.blocks != [] do
-      IO.puts("Blocks: ##{Enum.join(ticket.dependencies.blocks, ", #")}")
-    end
+  defp print_optional_list_inline(label, items, prefix) do
+    IO.puts("#{label}: #{prefix}#{Enum.join(items, ", #{prefix}")}")
   end
 
   defp status_symbol(:pending), do: "○"

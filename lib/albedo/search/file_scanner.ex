@@ -149,32 +149,27 @@ defmodule Albedo.Search.FileScanner do
   Detect if path is an Elixir/Phoenix project.
   """
   def detect_project_type(path) do
+    {:ok, detect_type(path)}
+  end
+
+  defp detect_type(path) do
     cond do
-      File.exists?(Path.join(path, "mix.exs")) ->
-        cond do
-          File.exists?(Path.join(path, "apps")) -> {:ok, :umbrella}
-          has_phoenix?(path) -> {:ok, :phoenix}
-          true -> {:ok, :elixir}
-        end
+      File.exists?(Path.join(path, "mix.exs")) -> detect_elixir_type(path)
+      File.exists?(Path.join(path, "package.json")) -> :node
+      File.exists?(Path.join(path, "requirements.txt")) -> :python
+      File.exists?(Path.join(path, "pyproject.toml")) -> :python
+      File.exists?(Path.join(path, "Gemfile")) -> :ruby
+      File.exists?(Path.join(path, "go.mod")) -> :go
+      File.exists?(Path.join(path, "Cargo.toml")) -> :rust
+      true -> :unknown
+    end
+  end
 
-      File.exists?(Path.join(path, "package.json")) ->
-        {:ok, :node}
-
-      File.exists?(Path.join(path, "requirements.txt")) or
-          File.exists?(Path.join(path, "pyproject.toml")) ->
-        {:ok, :python}
-
-      File.exists?(Path.join(path, "Gemfile")) ->
-        {:ok, :ruby}
-
-      File.exists?(Path.join(path, "go.mod")) ->
-        {:ok, :go}
-
-      File.exists?(Path.join(path, "Cargo.toml")) ->
-        {:ok, :rust}
-
-      true ->
-        {:ok, :unknown}
+  defp detect_elixir_type(path) do
+    cond do
+      File.exists?(Path.join(path, "apps")) -> :umbrella
+      has_phoenix?(path) -> :phoenix
+      true -> :elixir
     end
   end
 
@@ -185,34 +180,33 @@ defmodule Albedo.Search.FileScanner do
   defp scan_dir_recursive(path, exclude, max_depth, depth, _) do
     case File.ls(path) do
       {:ok, entries} ->
-        children =
-          entries
-          |> Enum.reject(&excluded?(&1, exclude))
-          |> Enum.sort()
-          |> Enum.map(fn entry ->
-            full_path = Path.join(path, entry)
-
-            case File.stat(full_path) do
-              {:ok, %{type: :directory}} ->
-                %{
-                  name: entry,
-                  type: :directory,
-                  children: scan_dir_recursive(full_path, exclude, max_depth, depth + 1, entry)
-                }
-
-              {:ok, %{type: :regular}} ->
-                file_info(full_path)
-
-              _ ->
-                nil
-            end
-          end)
-          |> Enum.reject(&is_nil/1)
-
-        children
+        entries
+        |> Enum.reject(&excluded?(&1, exclude))
+        |> Enum.sort()
+        |> Enum.map(&process_entry(&1, path, exclude, max_depth, depth))
+        |> Enum.reject(&is_nil/1)
 
       {:error, _} ->
         []
+    end
+  end
+
+  defp process_entry(entry, path, exclude, max_depth, depth) do
+    full_path = Path.join(path, entry)
+
+    case File.stat(full_path) do
+      {:ok, %{type: :directory}} ->
+        %{
+          name: entry,
+          type: :directory,
+          children: scan_dir_recursive(full_path, exclude, max_depth, depth + 1, entry)
+        }
+
+      {:ok, %{type: :regular}} ->
+        file_info(full_path)
+
+      _ ->
+        nil
     end
   end
 
@@ -248,30 +242,12 @@ defmodule Albedo.Search.FileScanner do
   defp build_tree_string(path, exclude, max_depth, depth, prefix) when depth < max_depth do
     case File.ls(path) do
       {:ok, entries} ->
-        entries
-        |> Enum.reject(&excluded?(&1, exclude))
-        |> Enum.sort()
+        filtered = Enum.reject(entries, &excluded?(&1, exclude)) |> Enum.sort()
+        total = length(filtered)
+
+        filtered
         |> Enum.with_index()
-        |> Enum.map(fn {entry, idx} ->
-          full_path = Path.join(path, entry)
-          is_last = idx == length(entries) - 1
-          connector = if is_last, do: "└── ", else: "├── "
-          next_prefix = if is_last, do: "    ", else: "│   "
-
-          case File.stat(full_path) do
-            {:ok, %{type: :directory}} ->
-              dir_content =
-                build_tree_string(full_path, exclude, max_depth, depth + 1, prefix <> next_prefix)
-
-              "#{prefix}#{connector}#{entry}/\n#{dir_content}"
-
-            {:ok, %{type: :regular}} ->
-              "#{prefix}#{connector}#{entry}"
-
-            _ ->
-              nil
-          end
-        end)
+        |> Enum.map(&render_tree_entry(&1, path, exclude, max_depth, depth, prefix, total))
         |> Enum.reject(&is_nil/1)
         |> Enum.join("\n")
 
@@ -281,6 +257,27 @@ defmodule Albedo.Search.FileScanner do
   end
 
   defp build_tree_string(_, _, _, _, _), do: ""
+
+  defp render_tree_entry({entry, idx}, path, exclude, max_depth, depth, prefix, total) do
+    full_path = Path.join(path, entry)
+    is_last = idx == total - 1
+    connector = if is_last, do: "└── ", else: "├── "
+    next_prefix = if is_last, do: "    ", else: "│   "
+
+    case File.stat(full_path) do
+      {:ok, %{type: :directory}} ->
+        dir_content =
+          build_tree_string(full_path, exclude, max_depth, depth + 1, prefix <> next_prefix)
+
+        "#{prefix}#{connector}#{entry}/\n#{dir_content}"
+
+      {:ok, %{type: :regular}} ->
+        "#{prefix}#{connector}#{entry}"
+
+      _ ->
+        nil
+    end
+  end
 
   defp has_phoenix?(path) do
     mix_file = Path.join(path, "mix.exs")

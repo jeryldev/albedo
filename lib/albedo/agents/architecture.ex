@@ -209,61 +209,61 @@ defmodule Albedo.Agents.Architecture do
 
   defp find_context_functions(app_path, context_name, _app_name) do
     context_file = Path.join(app_path, "#{context_name}.ex")
+    extract_function_names(context_file)
+  end
 
-    if File.exists?(context_file) do
-      case File.read(context_file) do
-        {:ok, content} ->
-          Regex.scan(~r/def\s+(\w+)\s*\(/, content)
-          |> Enum.map(fn [_, name] -> name end)
-          |> Enum.uniq()
-
-        _ ->
-          []
-      end
+  defp extract_function_names(file_path) do
+    with true <- File.exists?(file_path),
+         {:ok, content} <- File.read(file_path) do
+      Regex.scan(~r/def\s+(\w+)\s*\(/, content)
+      |> Enum.map(fn [_, name] -> name end)
+      |> Enum.uniq()
     else
-      []
+      _ -> []
     end
   end
 
   defp find_entry_points(path, app_name) do
-    entry_points = []
+    []
+    |> maybe_add_routes(path, app_name)
+    |> maybe_add_workers(path, app_name)
+  end
 
+  defp maybe_add_routes(entry_points, path, app_name) do
     router_path = Path.join([path, "lib", "#{app_name}_web", "router.ex"])
 
-    entry_points =
-      if File.exists?(router_path) do
-        case File.read(router_path) do
-          {:ok, content} ->
-            routes =
-              Regex.scan(~r/(get|post|put|patch|delete|live)\s+["']([^"']+)["']/, content)
-              |> Enum.map(fn [_, method, path] -> {method, path} end)
-              |> Enum.take(@max_routes)
+    case extract_routes(router_path) do
+      [] -> entry_points
+      routes -> entry_points ++ [{:router, routes}]
+    end
+  end
 
-            entry_points ++ [{:router, routes}]
+  defp extract_routes(router_path) do
+    with true <- File.exists?(router_path),
+         {:ok, content} <- File.read(router_path) do
+      Regex.scan(~r/(get|post|put|patch|delete|live)\s+["']([^"']+)["']/, content)
+      |> Enum.map(fn [_, method, route_path] -> {method, route_path} end)
+      |> Enum.take(@max_routes)
+    else
+      _ -> []
+    end
+  end
 
-          _ ->
-            entry_points
-        end
-      else
-        entry_points
-      end
-
+  defp maybe_add_workers(entry_points, path, app_name) do
     workers_path = Path.join([path, "lib", app_name || "", "workers"])
 
-    entry_points =
-      if File.dir?(workers_path) do
-        case File.ls(workers_path) do
-          {:ok, files} ->
-            workers = Enum.filter(files, &String.ends_with?(&1, ".ex"))
-            entry_points ++ [{:workers, workers}]
+    case extract_workers(workers_path) do
+      [] -> entry_points
+      workers -> entry_points ++ [{:workers, workers}]
+    end
+  end
 
-          _ ->
-            entry_points
-        end
-      else
-        entry_points
-      end
-
-    entry_points
+  defp extract_workers(workers_path) do
+    with true <- File.dir?(workers_path),
+         {:ok, files} <- File.ls(workers_path) do
+      Enum.filter(files, &String.ends_with?(&1, ".ex"))
+    else
+      _ -> []
+    end
   end
 end

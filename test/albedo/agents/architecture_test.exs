@@ -255,48 +255,41 @@ defmodule Albedo.Agents.ArchitectureTest do
 
   defp find_context_functions(app_path, context_name, _app_name) do
     context_file = Path.join(app_path, "#{context_name}.ex")
+    extract_function_names(context_file)
+  end
 
-    if File.exists?(context_file) do
-      case File.read(context_file) do
-        {:ok, content} ->
-          Regex.scan(~r/def\s+(\w+)\s*\(/, content)
-          |> Enum.map(fn [_, name] -> name end)
-          |> Enum.uniq()
-
-        _ ->
-          []
-      end
+  defp extract_function_names(file_path) do
+    with true <- File.exists?(file_path),
+         {:ok, content} <- File.read(file_path) do
+      Regex.scan(~r/def\s+(\w+)\s*\(/, content)
+      |> Enum.map(fn [_, name] -> name end)
+      |> Enum.uniq()
     else
-      []
+      _ -> []
     end
   end
 
   @max_routes 20
 
   defp find_entry_points(path, app_name) do
-    entry_points = []
+    []
+    |> maybe_add_routes(path, app_name)
+  end
 
+  defp maybe_add_routes(entry_points, path, app_name) do
     router_path = Path.join([path, "lib", "#{app_name}_web", "router.ex"])
 
-    entry_points =
-      if File.exists?(router_path) do
-        case File.read(router_path) do
-          {:ok, content} ->
-            routes =
-              Regex.scan(~r/(get|post|put|patch|delete|live)\s+["']([^"']+)["']/, content)
-              |> Enum.map(fn [_, method, path] -> {method, path} end)
-              |> Enum.take(@max_routes)
+    with true <- File.exists?(router_path),
+         {:ok, content} <- File.read(router_path) do
+      routes =
+        Regex.scan(~r/(get|post|put|patch|delete|live)\s+["']([^"']+)["']/, content)
+        |> Enum.map(fn [_, method, route] -> {method, route} end)
+        |> Enum.take(@max_routes)
 
-            entry_points ++ [{:router, routes}]
-
-          _ ->
-            entry_points
-        end
-      else
-        entry_points
-      end
-
-    entry_points
+      entry_points ++ [{:router, routes}]
+    else
+      _ -> entry_points
+    end
   end
 
   defp setup_phoenix_project(dir) do

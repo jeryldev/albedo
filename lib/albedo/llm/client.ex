@@ -53,45 +53,8 @@ defmodule Albedo.LLM.Client do
     provider_module = @providers[provider]
 
     if provider_module do
-      api_key = Config.api_key(config)
-      model = opts[:model] || Config.model(config)
-      temperature = opts[:temperature] || Config.temperature(config)
-
-      request_opts = [
-        api_key: api_key,
-        model: model,
-        temperature: temperature,
-        max_tokens: opts[:max_tokens]
-      ]
-
-      case provider_module.chat(prompt, request_opts) do
-        {:ok, response} ->
-          {:ok, response}
-
-        {:error, :rate_limited} ->
-          {:error, :rate_limited}
-
-        {:error, :timeout} ->
-          retry_with_log(config, prompt, opts, attempt, "Request timed out")
-
-        {:error, {:request_failed, %{reason: :timeout}}} ->
-          retry_with_log(config, prompt, opts, attempt, "Connection timed out")
-
-        {:error, {:request_failed, %{reason: :econnrefused}}} ->
-          retry_with_log(config, prompt, opts, attempt, "Connection refused")
-
-        {:error, {:request_failed, _}} ->
-          retry_with_log(config, prompt, opts, attempt, "Network error")
-
-        {:error, {:http_error, status, _}} when status >= 500 ->
-          retry_with_log(config, prompt, opts, attempt, "Server error #{status}")
-
-        {:error, {:http_error, status}} when status >= 500 ->
-          retry_with_log(config, prompt, opts, attempt, "Server error #{status}")
-
-        {:error, reason} ->
-          {:error, reason}
-      end
+      result = execute_provider_chat(config, prompt, opts, provider_module)
+      handle_chat_result(result, config, prompt, opts, attempt)
     else
       {:error, {:unknown_provider, provider}}
     end
@@ -100,6 +63,60 @@ defmodule Albedo.LLM.Client do
   defp do_chat(_config, _prompt, _opts, _attempt) do
     {:error, :max_retries_exceeded}
   end
+
+  defp execute_provider_chat(config, prompt, opts, provider_module) do
+    request_opts = [
+      api_key: Config.api_key(config),
+      model: opts[:model] || Config.model(config),
+      temperature: opts[:temperature] || Config.temperature(config),
+      max_tokens: opts[:max_tokens]
+    ]
+
+    provider_module.chat(prompt, request_opts)
+  end
+
+  defp handle_chat_result({:ok, response}, _, _, _, _), do: {:ok, response}
+  defp handle_chat_result({:error, :rate_limited}, _, _, _, _), do: {:error, :rate_limited}
+
+  defp handle_chat_result({:error, :timeout}, config, prompt, opts, attempt) do
+    retry_with_log(config, prompt, opts, attempt, "Request timed out")
+  end
+
+  defp handle_chat_result(
+         {:error, {:request_failed, %{reason: :timeout}}},
+         config,
+         prompt,
+         opts,
+         attempt
+       ) do
+    retry_with_log(config, prompt, opts, attempt, "Connection timed out")
+  end
+
+  defp handle_chat_result(
+         {:error, {:request_failed, %{reason: :econnrefused}}},
+         config,
+         prompt,
+         opts,
+         attempt
+       ) do
+    retry_with_log(config, prompt, opts, attempt, "Connection refused")
+  end
+
+  defp handle_chat_result({:error, {:request_failed, _}}, config, prompt, opts, attempt) do
+    retry_with_log(config, prompt, opts, attempt, "Network error")
+  end
+
+  defp handle_chat_result({:error, {:http_error, status, _}}, config, prompt, opts, attempt)
+       when status >= 500 do
+    retry_with_log(config, prompt, opts, attempt, "Server error #{status}")
+  end
+
+  defp handle_chat_result({:error, {:http_error, status}}, config, prompt, opts, attempt)
+       when status >= 500 do
+    retry_with_log(config, prompt, opts, attempt, "Server error #{status}")
+  end
+
+  defp handle_chat_result({:error, reason}, _, _, _, _), do: {:error, reason}
 
   defp retry_with_log(config, prompt, opts, attempt, message) do
     Logger.warning("#{message}, retrying (attempt #{attempt + 1}/#{@max_retries})")

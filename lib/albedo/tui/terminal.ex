@@ -10,29 +10,24 @@ defmodule Albedo.TUI.Terminal do
   Uses OTP 28's native shell raw mode.
   """
   def enable_raw_mode do
-    try do
-      :shell.start_interactive({:noshell, :raw})
-      {:ok, :raw_mode}
-    rescue
-      _ -> {:error, :not_a_tty}
-    catch
-      _, _ -> {:error, :not_a_tty}
-    end
+    :shell.start_interactive({:noshell, :raw})
+    {:ok, :raw_mode}
+  rescue
+    _ -> {:error, :not_a_tty}
+  catch
+    _, _ -> {:error, :not_a_tty}
   end
 
   @doc """
   Restores the terminal to cooked (normal) mode.
   """
   def restore_mode(:raw_mode) do
-    try do
-      :shell.start_interactive({:noshell, :cooked})
-    rescue
-      _ -> :ok
-    catch
-      _, _ -> :ok
-    end
-
+    :shell.start_interactive({:noshell, :cooked})
     :ok
+  rescue
+    _ -> :ok
+  catch
+    _, _ -> :ok
   end
 
   def restore_mode(_), do: :ok

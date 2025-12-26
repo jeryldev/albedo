@@ -17,19 +17,35 @@ defmodule Albedo.Test.SessionHelpers do
   Create a mock session state.
   """
   def mock_session_state(opts \\ []) do
+    now = DateTime.utc_now()
+    merged = merge_with_defaults(opts)
+
     %Albedo.Session.State{
-      id: opts[:id] || "test-session-#{:rand.uniform(999)}",
-      codebase_path: opts[:codebase_path] || "/tmp/test_codebase",
-      task: opts[:task] || "Test task description",
-      state: opts[:state] || :created,
-      created_at: DateTime.utc_now(),
-      updated_at: DateTime.utc_now(),
-      session_dir: opts[:session_dir] || tmp_session_dir(),
-      config: opts[:config] || %{},
+      id: merged.id,
+      codebase_path: merged.codebase_path,
+      task: merged.task,
+      state: merged.state,
+      created_at: now,
+      updated_at: now,
+      session_dir: merged.session_dir,
+      config: merged.config,
       phases: init_phases(opts[:phases] || %{}),
-      context: opts[:context] || %{},
-      clarifying_questions: opts[:clarifying_questions] || [],
+      context: merged.context,
+      clarifying_questions: merged.clarifying_questions,
       summary: opts[:summary]
+    }
+  end
+
+  defp merge_with_defaults(opts) do
+    %{
+      id: Keyword.get(opts, :id, "test-session-#{:rand.uniform(999)}"),
+      codebase_path: Keyword.get(opts, :codebase_path, "/tmp/test_codebase"),
+      task: Keyword.get(opts, :task, "Test task description"),
+      state: Keyword.get(opts, :state, :created),
+      session_dir: Keyword.get(opts, :session_dir, tmp_session_dir()),
+      config: Keyword.get(opts, :config, %{}),
+      context: Keyword.get(opts, :context, %{}),
+      clarifying_questions: Keyword.get(opts, :clarifying_questions, [])
     }
   end
 

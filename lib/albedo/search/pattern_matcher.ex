@@ -139,17 +139,21 @@ defmodule Albedo.Search.PatternMatcher do
   """
   def detect_database(file_contents) do
     @database_indicators
-    |> Enum.find(fn {_db, indicators} ->
-      Enum.any?(indicators, fn {:content, pattern} ->
-        Enum.any?(file_contents, fn content ->
-          String.contains?(content, pattern)
-        end)
-      end)
-    end)
+    |> Enum.find(fn {_db, indicators} -> matches_any_indicator?(indicators, file_contents) end)
     |> case do
       {db, _} -> db
       nil -> nil
     end
+  end
+
+  defp matches_any_indicator?(indicators, file_contents) do
+    Enum.any?(indicators, fn {:content, pattern} ->
+      content_contains_pattern?(file_contents, pattern)
+    end)
+  end
+
+  defp content_contains_pattern?(file_contents, pattern) do
+    Enum.any?(file_contents, &String.contains?(&1, pattern))
   end
 
   @doc """
@@ -171,43 +175,41 @@ defmodule Albedo.Search.PatternMatcher do
   def extract_elixir_contexts(path) do
     lib_path = Path.join(path, "lib")
 
-    case File.ls(lib_path) do
-      {:ok, entries} ->
-        app_dir =
-          entries
-          |> Enum.reject(&String.ends_with?(&1, "_web"))
-          |> Enum.find(fn entry ->
-            full = Path.join(lib_path, entry)
-            File.dir?(full) and entry != "mix"
-          end)
+    with {:ok, entries} <- File.ls(lib_path),
+         app_dir when not is_nil(app_dir) <- find_app_dir(entries, lib_path),
+         {:ok, context_entries} <- File.ls(Path.join(lib_path, app_dir)) do
+      context_path = Path.join(lib_path, app_dir)
+      extract_context_entries(context_entries, context_path)
+    else
+      _ -> []
+    end
+  end
 
-        if app_dir do
-          context_path = Path.join(lib_path, app_dir)
+  defp find_app_dir(entries, lib_path) do
+    entries
+    |> Enum.reject(&String.ends_with?(&1, "_web"))
+    |> Enum.find(fn entry ->
+      full = Path.join(lib_path, entry)
+      File.dir?(full) and entry != "mix"
+    end)
+  end
 
-          case File.ls(context_path) do
-            {:ok, context_entries} ->
-              context_entries
-              |> Enum.filter(fn entry ->
-                full = Path.join(context_path, entry)
-                File.dir?(full) or String.ends_with?(entry, ".ex")
-              end)
-              |> Enum.map(fn entry ->
-                if File.dir?(Path.join(context_path, entry)) do
-                  {:context, entry}
-                else
-                  {:module, String.trim_trailing(entry, ".ex")}
-                end
-              end)
+  defp extract_context_entries(entries, context_path) do
+    entries
+    |> Enum.filter(&valid_context_entry?(&1, context_path))
+    |> Enum.map(&classify_entry(&1, context_path))
+  end
 
-            _ ->
-              []
-          end
-        else
-          []
-        end
+  defp valid_context_entry?(entry, context_path) do
+    full = Path.join(context_path, entry)
+    File.dir?(full) or String.ends_with?(entry, ".ex")
+  end
 
-      _ ->
-        []
+  defp classify_entry(entry, context_path) do
+    if File.dir?(Path.join(context_path, entry)) do
+      {:context, entry}
+    else
+      {:module, String.trim_trailing(entry, ".ex")}
     end
   end
 
@@ -223,34 +225,29 @@ defmodule Albedo.Search.PatternMatcher do
   Extract Elixir version from mix.exs or .tool-versions.
   """
   def extract_elixir_version(path) do
+    extract_version_from_tool_versions(path) || extract_version_from_mix(path)
+  end
+
+  defp extract_version_from_tool_versions(path) do
     tool_versions = Path.join(path, ".tool-versions")
 
-    cond do
-      File.exists?(tool_versions) ->
-        case File.read(tool_versions) do
-          {:ok, content} ->
-            case Regex.run(~r/elixir\s+([\d.]+)/, content) do
-              [_, version] -> version
-              _ -> nil
-            end
+    with true <- File.exists?(tool_versions),
+         {:ok, content} <- File.read(tool_versions),
+         [_, version] <- Regex.run(~r/elixir\s+([\d.]+)/, content) do
+      version
+    else
+      _ -> nil
+    end
+  end
 
-          _ ->
-            nil
-        end
+  defp extract_version_from_mix(path) do
+    mix_file = Path.join(path, "mix.exs")
 
-      true ->
-        mix_file = Path.join(path, "mix.exs")
-
-        case File.read(mix_file) do
-          {:ok, content} ->
-            case Regex.run(~r/elixir:\s*"~>\s*([\d.]+)"/, content) do
-              [_, version] -> version
-              _ -> nil
-            end
-
-          _ ->
-            nil
-        end
+    with {:ok, content} <- File.read(mix_file),
+         [_, version] <- Regex.run(~r/elixir:\s*"~>\s*([\d.]+)"/, content) do
+      version
+    else
+      _ -> nil
     end
   end
 

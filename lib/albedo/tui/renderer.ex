@@ -310,48 +310,57 @@ defmodule Albedo.TUI.Renderer do
   end
 
   defp build_edit_content_line(row, state, width) do
-    ticket = State.current_ticket(state)
-
-    if ticket == nil do
-      String.duplicate(" ", width)
-    else
-      fields = State.editable_fields()
-      total_field_rows = length(fields) * 2 + 2
-
-      cond do
-        row == 0 ->
-          @colors.bold <>
-            @colors.cyan <> String.pad_trailing("Editing ##{ticket.id}", width) <> @colors.reset
-
-        row == 1 ->
-          String.duplicate(" ", width)
-
-        row <= total_field_rows ->
-          field_idx = div(row - 2, 2)
-          is_label_row = rem(row - 2, 2) == 0
-          field = Enum.at(fields, field_idx)
-
-          if field do
-            is_active = state.edit_field == field
-
-            if is_label_row do
-              build_field_label_line(field, width, is_active)
-            else
-              build_field_input_line(state, ticket, field, width, is_active)
-            end
-          else
-            String.duplicate(" ", width)
-          end
-
-        row == total_field_rows + 1 ->
-          @colors.dim <>
-            String.pad_trailing("Tab/Shift+Tab:nav  Enter:save  Esc:cancel", width) <>
-            @colors.reset
-
-        true ->
-          String.duplicate(" ", width)
-      end
+    case State.current_ticket(state) do
+      nil -> String.duplicate(" ", width)
+      ticket -> build_edit_row(row, state, ticket, width)
     end
+  end
+
+  defp build_edit_row(0, _state, ticket, width) do
+    @colors.bold <>
+      @colors.cyan <> String.pad_trailing("Editing ##{ticket.id}", width) <> @colors.reset
+  end
+
+  defp build_edit_row(1, _state, _ticket, width), do: String.duplicate(" ", width)
+
+  defp build_edit_row(row, state, ticket, width) do
+    fields = State.editable_fields()
+    total_field_rows = length(fields) * 2 + 2
+
+    cond do
+      row <= total_field_rows ->
+        render_field_row(row, state, ticket, fields, width)
+
+      row == total_field_rows + 1 ->
+        @colors.dim <>
+          String.pad_trailing("Tab/Shift+Tab:nav  Enter:save  Esc:cancel", width) <>
+          @colors.reset
+
+      true ->
+        String.duplicate(" ", width)
+    end
+  end
+
+  defp render_field_row(row, state, ticket, fields, width) do
+    field_idx = div(row - 2, 2)
+    is_label_row = rem(row - 2, 2) == 0
+
+    case Enum.at(fields, field_idx) do
+      nil ->
+        String.duplicate(" ", width)
+
+      field ->
+        is_active = state.edit_field == field
+        render_field_content(is_label_row, state, ticket, field, width, is_active)
+    end
+  end
+
+  defp render_field_content(true, _state, _ticket, field, width, is_active) do
+    build_field_label_line(field, width, is_active)
+  end
+
+  defp render_field_content(false, state, ticket, field, width, is_active) do
+    build_field_input_line(state, ticket, field, width, is_active)
   end
 
   defp build_field_label_line(field, width, is_active) do
