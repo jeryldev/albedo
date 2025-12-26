@@ -2,6 +2,9 @@ defmodule Albedo.Agents.ChangePlanner do
   @moduledoc """
   Phase 4: Change Planning Agent.
   Generates concrete, actionable tickets based on all previous research.
+
+  Uses structured JSON output by default for reliable parsing.
+  Falls back to markdown parsing for legacy responses.
   """
 
   use Albedo.Agents.Base
@@ -14,33 +17,303 @@ defmodule Albedo.Agents.ChangePlanner do
     task = state.task
     context = state.context
     greenfield? = context[:greenfield] || false
+    use_structured? = context[:structured_output] != false
 
-    prompt = Prompts.change_planning(task, context)
+    prompt =
+      if use_structured? do
+        Prompts.change_planning_structured(task, context)
+      else
+        Prompts.change_planning(task, context)
+      end
 
     case call_llm(prompt, max_tokens: 16_384) do
       {:ok, response} ->
-        tickets = parse_tickets(response)
-        tickets_count = length(tickets)
-        total_points = tickets |> Enum.map(& &1.estimate) |> Enum.reject(&is_nil/1) |> Enum.sum()
-        summary = extract_summary(response)
-
-        findings = %{
-          content: response,
-          tickets: tickets,
-          tickets_count: tickets_count,
-          total_points: total_points,
-          files_to_create: summary.files_to_create,
-          files_to_modify: summary.files_to_modify,
-          risks_identified: summary.risks_identified,
-          greenfield: greenfield?
-        }
-
-        {:ok, findings}
+        process_response(response, greenfield?, use_structured?)
 
       {:error, reason} ->
         {:error, reason}
     end
   end
+
+  defp process_response(response, greenfield?, true = _use_structured?) do
+    case Parser.parse_structured_response(response) do
+      {:ok, parsed} ->
+        build_findings_from_structured(response, parsed, greenfield?)
+
+      {:error, _reason} ->
+        process_response(response, greenfield?, false)
+    end
+  end
+
+  defp process_response(response, greenfield?, false = _use_structured?) do
+    tickets = parse_tickets(response)
+    tickets_count = length(tickets)
+    total_points = calculate_total_points(tickets)
+    summary = extract_summary_from_markdown(response)
+
+    findings = %{
+      content: response,
+      tickets: tickets,
+      tickets_count: tickets_count,
+      total_points: total_points,
+      files_to_create: summary.files_to_create,
+      files_to_modify: summary.files_to_modify,
+      risks_identified: summary.risks_identified,
+      greenfield: greenfield?
+    }
+
+    {:ok, findings}
+  end
+
+  defp build_findings_from_structured(response, parsed, greenfield?) do
+    tickets = parsed.tickets
+    tickets_count = length(tickets)
+    total_points = calculate_total_points(tickets)
+
+    files_to_create = count_files_from_tickets(tickets, :create)
+    files_to_modify = count_files_from_tickets(tickets, :modify)
+    risks_identified = length(parsed.risks || [])
+
+    content = format_structured_as_markdown(parsed, response)
+
+    findings = %{
+      content: content,
+      tickets: tickets,
+      tickets_count: tickets_count,
+      total_points: total_points,
+      files_to_create: files_to_create,
+      files_to_modify: files_to_modify,
+      risks_identified: risks_identified,
+      greenfield: greenfield?,
+      structured_response: parsed
+    }
+
+    {:ok, findings}
+  end
+
+  defp calculate_total_points(tickets) do
+    tickets
+    |> Enum.map(& &1.estimate)
+    |> Enum.reject(&is_nil/1)
+    |> Enum.sum()
+  end
+
+  defp count_files_from_tickets(tickets, type) do
+    tickets
+    |> Enum.flat_map(fn ticket ->
+      case type do
+        :create -> ticket.files.create || []
+        :modify -> ticket.files.modify || []
+      end
+    end)
+    |> Enum.uniq()
+    |> length()
+  end
+
+  defp format_structured_as_markdown(parsed, original_json) do
+    summary_section = format_summary_section(parsed.summary)
+    overview_section = format_overview_section(parsed.technical_overview)
+    tickets_section = format_tickets_section(parsed.tickets)
+    risks_section = format_risks_section(parsed.risks)
+    order_section = format_order_section(parsed.implementation_order)
+
+    """
+    #{summary_section}
+
+    #{overview_section}
+
+    ---
+
+    ## Tickets
+
+    #{tickets_section}
+
+    ---
+
+    #{order_section}
+
+    #{risks_section}
+
+    ## Effort Summary
+
+    | Category | Count |
+    |----------|-------|
+    | Total Tickets | #{length(parsed.tickets)} |
+    | Total Points | #{calculate_total_points(parsed.tickets)} |
+
+    ---
+
+    <details>
+    <summary>Raw JSON Response</summary>
+
+    ```json
+    #{original_json}
+    ```
+
+    </details>
+    """
+  end
+
+  defp format_summary_section(nil), do: ""
+
+  defp format_summary_section(summary) do
+    domain_context =
+      if summary.domain_context && summary.domain_context != [] do
+        "## Domain Context\n" <>
+          Enum.map_join(summary.domain_context, "\n", &"- #{&1}")
+      else
+        ""
+      end
+
+    in_scope =
+      if summary.in_scope && summary.in_scope != [] do
+        "### In Scope\n" <> Enum.map_join(summary.in_scope, "\n", &"- #{&1}")
+      else
+        ""
+      end
+
+    out_of_scope =
+      if summary.out_of_scope && summary.out_of_scope != [] do
+        "### Out of Scope\n" <> Enum.map_join(summary.out_of_scope, "\n", &"- #{&1}")
+      else
+        ""
+      end
+
+    """
+    # Feature: #{summary.title || "Untitled"}
+
+    ## Executive Summary
+    #{summary.description || ""}
+
+    #{domain_context}
+
+    ## Scope
+
+    #{in_scope}
+
+    #{out_of_scope}
+    """
+  end
+
+  defp format_overview_section(nil), do: ""
+
+  defp format_overview_section(overview) when is_map(overview) do
+    key_changes =
+      if overview["key_changes"] do
+        Enum.with_index(overview["key_changes"], 1)
+        |> Enum.map_join("\n", fn {change, idx} -> "#{idx}. #{change}" end)
+      else
+        ""
+      end
+
+    """
+    ## Technical Overview
+
+    ### Current State
+    #{overview["current_state"] || "N/A"}
+
+    ### Target State
+    #{overview["target_state"] || "N/A"}
+
+    ### Key Changes
+    #{key_changes}
+    """
+  end
+
+  defp format_tickets_section(tickets) do
+    Enum.map_join(tickets, "\n\n---\n\n", &format_single_ticket/1)
+  end
+
+  defp format_single_ticket(ticket) do
+    """
+    ### Ticket ##{ticket.id}: #{ticket.title}
+
+    **Type:** #{ticket.type |> to_string() |> String.capitalize()}
+    **Priority:** #{ticket.priority |> to_string() |> String.capitalize()}
+    **Estimate:** #{format_estimate(ticket.estimate)}
+    **Depends On:** #{format_deps(ticket.dependencies.blocked_by, "None")}
+    **Blocks:** #{format_deps(ticket.dependencies.blocks, "")}
+
+    #### Description
+    #{ticket.description || "No description"}
+
+    #### Implementation Notes
+    #{ticket.implementation_notes || "No implementation notes"}
+
+    #{format_files_table(ticket.files.create, "Files to Create", "Purpose")}
+
+    #{format_files_table(ticket.files.modify, "Files to Modify", "Changes")}
+
+    #{format_acceptance_criteria(ticket.acceptance_criteria)}
+    """
+  end
+
+  @estimate_labels %{
+    1 => "Trivial",
+    2 => "Small",
+    3 => "Medium",
+    5 => "Large",
+    8 => "Extra Large",
+    13 => "Epic"
+  }
+
+  defp format_estimate(nil), do: "Not estimated"
+  defp format_estimate(n), do: Map.get(@estimate_labels, n, "#{n} points")
+
+  defp format_deps([], default), do: default
+  defp format_deps(deps, _default), do: Enum.map_join(deps, ", ", &"##{&1}")
+
+  defp format_files_table(input, _, _) when input in [nil, []], do: ""
+
+  defp format_files_table(files, title, col) do
+    "#### #{title}\n| File | #{col} |\n|------|--------|\n" <>
+      Enum.map_join(files, "\n", &"| #{&1} | |")
+  end
+
+  defp format_acceptance_criteria(input) when input in [nil, []], do: ""
+
+  defp format_acceptance_criteria(criteria) do
+    "#### Acceptance Criteria\n" <> Enum.map_join(criteria, "\n", &"- [ ] #{&1}")
+  end
+
+  defp format_risks_section([]), do: ""
+
+  defp format_risks_section(risks) when is_list(risks) do
+    rows = Enum.map_join(risks, "\n", &format_risk_row/1)
+
+    """
+    ## Risk Summary
+
+    | Risk | Likelihood | Impact | Mitigation |
+    |------|------------|--------|------------|
+    #{rows}
+    """
+  end
+
+  defp format_risks_section(_), do: ""
+
+  defp format_risk_row(risk) do
+    "| #{risk["risk"] || ""} | #{risk["likelihood"] || ""} | #{risk["impact"] || ""} | #{risk["mitigation"] || ""} |"
+  end
+
+  defp format_order_section([]), do: ""
+
+  defp format_order_section(order) when is_list(order) do
+    items =
+      order
+      |> Enum.with_index(1)
+      |> Enum.map_join("\n", fn {item, idx} ->
+        "#{idx}. **##{item["ticket_id"]}** - #{item["reason"] || ""}"
+      end)
+
+    """
+    ## Implementation Order
+
+    #{items}
+    """
+  end
+
+  defp format_order_section(_), do: ""
 
   defp parse_tickets(content) do
     case Parser.parse(content) do
@@ -72,7 +345,6 @@ defmodule Albedo.Agents.ChangePlanner do
   end
 
   defp research_files_list(true) do
-    # Greenfield projects skip conventions, feature_location, and impact_analysis
     """
     - [00_domain_research.md](./00_domain_research.md)
     - [01_tech_stack.md](./01_tech_stack.md)
@@ -91,7 +363,7 @@ defmodule Albedo.Agents.ChangePlanner do
     """
   end
 
-  defp extract_summary(content) do
+  defp extract_summary_from_markdown(content) do
     tickets_count = count_tickets(content)
     total_points = extract_total_points(content)
     files_to_create = count_files_to_create(content)

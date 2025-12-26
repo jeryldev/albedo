@@ -3,6 +3,8 @@ defmodule Albedo.LLM.Prompts do
   Prompt templates for each agent type.
   """
 
+  alias Albedo.Tickets.Schema
+
   @doc """
   Generate prompt for domain research phase.
   """
@@ -791,4 +793,47 @@ defmodule Albedo.LLM.Prompts do
   end
 
   defp format_greenfield_context(_), do: ""
+
+  @doc """
+  Generate prompt for change planning with structured JSON output.
+  This version requests JSON output matching the Ticket schema for reliable parsing.
+  """
+  def change_planning_structured(task, context) do
+    greenfield_section = format_greenfield_context(context)
+
+    """
+    You are a senior technical lead creating implementation tickets for a development team.
+
+    TASK DESCRIPTION:
+    #{task}
+    #{greenfield_section}
+
+    FULL CONTEXT:
+    #{format_full_context(context)}
+
+    INSTRUCTIONS:
+    Based on all the research, create a comprehensive set of actionable tickets.
+    Each ticket should be specific enough that a junior engineer can pick it up and start working.
+
+    IMPORTANT: Respond ONLY with valid JSON matching the schema below. No markdown, no explanations, just JSON.
+
+    JSON SCHEMA:
+    #{Schema.schema_as_string()}
+
+    TICKET GUIDELINES:
+    - id: Sequential string numbers ("1", "2", "3", etc.)
+    - title: Action-oriented, clear, specific (e.g., "Add status field to journal entries schema")
+    - type: #{Enum.join(Schema.ticket_types(), ", ")}
+    - priority: #{Enum.join(Schema.priorities(), ", ")}
+    - estimate: #{Schema.estimate_mapping() |> Map.keys() |> Enum.join(", ")}
+    - acceptance_criteria: Specific, testable conditions that define "done"
+    - implementation_notes: Technical guidance for implementation
+    - files.create: New files to create (full paths like "lib/app/schema.ex")
+    - files.modify: Existing files to modify
+    - dependencies.blocked_by: Ticket IDs this depends on (e.g., ["1", "2"])
+    - dependencies.blocks: Ticket IDs that depend on this
+
+    Respond with ONLY the JSON object. No other text.
+    """
+  end
 end
