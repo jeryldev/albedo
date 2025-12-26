@@ -30,6 +30,9 @@ config/*.secret.exs
 .env
 .env.*
 
+# Research and planning docs (local only, never commit)
+/docs/
+
 # Editor and OS files
 .DS_Store
 *.swp
