@@ -4,7 +4,7 @@ defmodule Albedo.CLI do
   Parses arguments and dispatches to appropriate commands.
   """
 
-  alias Albedo.{Config, Session, Tickets}
+  alias Albedo.{Config, Session, Tickets, TUI}
   alias Albedo.Tickets.Exporter
 
   @version Mix.Project.config()[:version]
@@ -169,6 +169,10 @@ defmodule Albedo.CLI do
 
     merged_opts = Keyword.merge(opts, extra_opts)
     cmd_tickets(remaining, merged_opts)
+  end
+
+  defp run_command(["tui" | _], _opts) do
+    cmd_tui()
   end
 
   defp run_command([unknown | _], _opts) do
@@ -596,6 +600,30 @@ defmodule Albedo.CLI do
     IO.puts("  albedo config set-provider Select LLM provider")
     IO.puts("  albedo config set-key      Set API key for current provider")
     halt_with_error(1)
+  end
+
+  defp cmd_tui do
+    case TUI.start() do
+      :ok ->
+        :ok
+
+      {:error, :unsupported_platform} ->
+        print_error("TUI is not supported on this platform")
+        halt_with_error(1)
+
+      {:error, :not_a_tty} ->
+        print_error("TUI requires a terminal (TTY)")
+        IO.puts("")
+        print_info("Use the albedo-tui command instead:")
+        IO.puts("")
+        IO.puts("  albedo-tui")
+        IO.puts("")
+        halt_with_error(1)
+
+      {:error, reason} ->
+        print_error("TUI failed: #{inspect(reason)}")
+        halt_with_error(1)
+    end
   end
 
   defp cmd_path(session_id) do
@@ -1477,6 +1505,7 @@ defmodule Albedo.CLI do
           sessions                List recent sessions
           show <session_id>       View a session's output
           tickets [subcommand]    Manage tickets (list, show, start, done, reset)
+          tui                     Interactive terminal UI (use 'albedo-tui' command)
           path <session_id>       Print session path (use with cd)
           replan <session_path>   Re-run planning phase with different parameters
           config [subcommand]     Manage configuration (show, set-provider, set-key)

@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+#
+# Albedo TUI Launcher
+# Runs the TUI with proper TTY access via Mix
+#
+
+set -e
+
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Check if we're in the albedo directory
+if [[ ! -f "$SCRIPT_DIR/mix.exs" ]]; then
+  echo "Error: Cannot find Albedo source directory"
+  echo "Expected mix.exs at: $SCRIPT_DIR/mix.exs"
+  exit 1
+fi
+
+# Change to albedo directory and run TUI with error handling
+cd "$SCRIPT_DIR"
+exec mix run -e '
+case Albedo.TUI.start() do
+  :ok -> :ok
+  {:error, :not_a_tty} ->
+    IO.puts(:stderr, "Error: TUI requires a terminal (TTY)")
+    IO.puts(:stderr, "Make sure you are running this in a terminal, not piped or redirected.")
+    System.halt(1)
+  {:error, :unsupported_platform} ->
+    IO.puts(:stderr, "Error: TUI is not supported on this platform")
+    System.halt(1)
+  {:error, reason} ->
+    IO.puts(:stderr, "Error: TUI failed - #{inspect(reason)}")
+    System.halt(1)
+end
+'

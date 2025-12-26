@@ -658,6 +658,7 @@ print_completion() {
   echo -e "  ${CYAN}albedo config${NC}                          # View configuration"
   echo -e "  ${CYAN}albedo analyze . --task \"Add feature\"${NC}  # Analyze codebase"
   echo -e "  ${CYAN}albedo plan --name myapp --task \"...\"${NC}  # Plan new project"
+  echo -e "  ${CYAN}albedo-tui${NC}                              # Interactive terminal UI"
   echo ""
 
   if [[ -z "$API_KEY" ]]; then
