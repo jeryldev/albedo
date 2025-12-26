@@ -74,7 +74,9 @@ defmodule Albedo.TUI.Renderer do
     {:blank},
     {:section, "Projects Panel"},
     {:key, "Enter", "Load project tickets"},
-    {:key, "n / a", "Create new project"},
+    {:key, "n", "Create empty project"},
+    {:key, "p", "Plan new project (AI)"},
+    {:key, "a", "Analyze codebase (AI)"},
     {:key, "e", "Edit project task"},
     {:key, "x / X", "Delete project"},
     {:key, "R", "Refresh project list"},
@@ -83,12 +85,13 @@ defmodule Albedo.TUI.Renderer do
     {:key, "s", "Start ticket (mark in-progress)"},
     {:key, "d", "Done (mark completed)"},
     {:key, "r", "Reset ticket to pending"},
-    {:key, "a", "Add new ticket"},
+    {:key, "c", "Create new ticket"},
     {:key, "e", "Edit ticket"},
     {:key, "x / X", "Delete ticket"},
     {:blank},
     {:section, "Detail Panel"},
     {:key, "j / k", "Scroll content"},
+    {:key, "c", "Create new ticket"},
     {:key, "e", "Edit ticket"},
     {:blank},
     {:section, "Edit Mode"},
@@ -803,14 +806,14 @@ defmodule Albedo.TUI.Renderer do
   end
 
   defp status_bar_help(:projects) do
-    " j/k:nav  Tab:panel  Enter:load  n:new  e:edit  x:delete  R:refresh  ?:help  q:quit "
+    " j/k:nav  Tab:panel  Enter:load  n:new  p:plan  a:analyze  e:edit  x:del  ?:help  q:quit "
   end
 
   defp status_bar_help(:tickets) do
-    " j/k:nav  Tab:panel  s:start  d:done  r:reset  a:add  e:edit  x:delete  ?:help  q:quit "
+    " j/k:nav  Tab:panel  s:start  d:done  r:reset  c:create  e:edit  x:del  ?:help  q:quit "
   end
 
   defp status_bar_help(:detail) do
-    " j/k:scroll  Tab:panel  e:edit  ?:help  q:quit "
+    " j/k:scroll  Tab:panel  c:create  e:edit  ?:help  q:quit "
   end
 end

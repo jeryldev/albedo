@@ -150,8 +150,10 @@ defmodule Albedo.TUI do
   defp handle_char(state, "d", _projects_dir), do: handle_done(state)
   defp handle_char(state, "r", _projects_dir), do: handle_reset(state)
   defp handle_char(state, "R", projects_dir), do: handle_refresh(state, projects_dir)
-  defp handle_char(state, "a", _projects_dir), do: handle_add(state)
+  defp handle_char(state, "c", _projects_dir), do: handle_create(state)
   defp handle_char(state, "n", _projects_dir), do: handle_new_project(state)
+  defp handle_char(state, "p", _projects_dir), do: handle_plan(state)
+  defp handle_char(state, "a", _projects_dir), do: handle_analyze(state)
   defp handle_char(state, "e", _projects_dir), do: handle_edit(state)
   defp handle_char(state, "x", _projects_dir), do: handle_delete(state)
   defp handle_char(state, "X", _projects_dir), do: handle_delete(state)
@@ -456,15 +458,37 @@ defmodule Albedo.TUI do
     State.set_message(state, "Switch to projects panel to create new project")
   end
 
-  defp handle_add(%State{active_panel: :projects} = state) do
-    State.enter_input_mode(state, :new_project, "New project task: ")
-  end
-
-  defp handle_add(%State{active_panel: panel} = state) when panel in [:tickets, :detail] do
+  defp handle_create(%State{active_panel: panel} = state) when panel in [:tickets, :detail] do
     handle_add_ticket(state)
   end
 
-  defp handle_add(state), do: state
+  defp handle_create(%State{active_panel: :projects} = state) do
+    State.set_message(state, "Use 'n' to create empty project, 'p' to plan with AI")
+  end
+
+  defp handle_create(state), do: state
+
+  defp handle_plan(%State{active_panel: :projects} = state) do
+    State.set_message(
+      state,
+      "Plan feature coming soon - use CLI: albedo plan --name <name> --task <task>"
+    )
+  end
+
+  defp handle_plan(state) do
+    State.set_message(state, "Switch to projects panel to plan a new project")
+  end
+
+  defp handle_analyze(%State{active_panel: :projects} = state) do
+    State.set_message(
+      state,
+      "Analyze feature coming soon - use CLI: albedo analyze <path> --task <task>"
+    )
+  end
+
+  defp handle_analyze(state) do
+    State.set_message(state, "Switch to projects panel to analyze a codebase")
+  end
 
   defp handle_edit(%State{active_panel: :projects} = state) do
     case State.current_project(state) do
