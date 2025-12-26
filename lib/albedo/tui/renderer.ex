@@ -52,9 +52,116 @@ defmodule Albedo.TUI.Renderer do
     ])
   end
 
+  defp build_frame(%{mode: :help} = state, width, height) do
+    lines = for row <- 1..height, do: build_help_line(row, state, width, height)
+    Enum.intersperse(lines, "\r\n")
+  end
+
   defp build_frame(state, width, height) do
     lines = for row <- 1..height, do: build_line(row, state, width, height)
     Enum.intersperse(lines, "\r\n")
+  end
+
+  @help_content [
+    {:header, "Albedo TUI - Keyboard Shortcuts"},
+    {:blank},
+    {:section, "Navigation"},
+    {:key, "j / ↓", "Move down"},
+    {:key, "k / ↑", "Move up"},
+    {:key, "h / ←", "Previous panel"},
+    {:key, "l / → / Tab", "Next panel"},
+    {:key, "Shift+Tab", "Previous panel"},
+    {:blank},
+    {:section, "Projects Panel"},
+    {:key, "Enter", "Load project tickets"},
+    {:key, "n / a", "Create new project"},
+    {:key, "e", "Edit project task"},
+    {:key, "x / X", "Delete project"},
+    {:key, "R", "Refresh project list"},
+    {:blank},
+    {:section, "Tickets Panel"},
+    {:key, "s", "Start ticket (mark in-progress)"},
+    {:key, "d", "Done (mark completed)"},
+    {:key, "r", "Reset ticket to pending"},
+    {:key, "a", "Add new ticket"},
+    {:key, "e", "Edit ticket"},
+    {:key, "x / X", "Delete ticket"},
+    {:blank},
+    {:section, "Detail Panel"},
+    {:key, "j / k", "Scroll content"},
+    {:key, "e", "Edit ticket"},
+    {:blank},
+    {:section, "Edit Mode"},
+    {:key, "Tab", "Next field"},
+    {:key, "Shift+Tab", "Previous field"},
+    {:key, "Enter", "Save changes"},
+    {:key, "Esc", "Cancel edit"},
+    {:blank},
+    {:section, "General"},
+    {:key, "?", "Show/hide this help"},
+    {:key, "q / Q", "Quit"},
+    {:key, "Ctrl+C", "Force quit"},
+    {:blank},
+    {:footer, "Press Esc, Enter, or ? to close"}
+  ]
+
+  defp build_help_line(row, _state, width, height) do
+    content_start = 3
+    content_end = height - 2
+
+    cond do
+      row == 1 ->
+        title = " Albedo TUI Help "
+
+        @colors.bold <>
+          @colors.cyan <> String.pad_trailing(title, width) <> @colors.reset
+
+      row == 2 or row == height - 1 ->
+        @colors.dim <> String.duplicate("─", width) <> @colors.reset
+
+      row == height ->
+        @colors.dim <>
+          String.pad_trailing(" Press Esc, Enter, or ? to close ", width) <> @colors.reset
+
+      row >= content_start and row <= content_end ->
+        help_row = row - content_start
+        render_help_content_line(help_row, width)
+
+      true ->
+        String.duplicate(" ", width)
+    end
+  end
+
+  defp render_help_content_line(row, width) do
+    case Enum.at(@help_content, row) do
+      nil ->
+        String.duplicate(" ", width)
+
+      {:header, text} ->
+        @colors.bold <>
+          @colors.cyan <>
+          String.pad_trailing("  " <> text, width) <> @colors.reset
+
+      {:blank} ->
+        String.duplicate(" ", width)
+
+      {:section, title} ->
+        @colors.bold <>
+          @colors.yellow <>
+          String.pad_trailing("  " <> title, width) <> @colors.reset
+
+      {:key, key, desc} ->
+        padded_key = String.pad_trailing(key, 16)
+
+        "    " <>
+          @colors.cyan <>
+          padded_key <>
+          @colors.reset <>
+          String.pad_trailing(desc, width - 20)
+
+      {:footer, text} ->
+        @colors.dim <> String.pad_trailing("  " <> text, width) <> @colors.reset
+    end
   end
 
   defp build_line(row, state, width, height) do
@@ -696,14 +803,14 @@ defmodule Albedo.TUI.Renderer do
   end
 
   defp status_bar_help(:projects) do
-    " j/k:nav  Tab:panel  Enter:select  n:new  e:edit  x:delete  R:refresh  q:quit "
+    " j/k:nav  Tab:panel  Enter:load  n:new  e:edit  x:delete  R:refresh  ?:help  q:quit "
   end
 
   defp status_bar_help(:tickets) do
-    " j/k:nav  Tab:panel  s:start  d:done  r:reset  a:add  e:edit  x:delete  q:quit "
+    " j/k:nav  Tab:panel  s:start  d:done  r:reset  a:add  e:edit  x:delete  ?:help  q:quit "
   end
 
   defp status_bar_help(:detail) do
-    " j/k:scroll  Tab:panel  e:edit  q:quit "
+    " j/k:scroll  Tab:panel  e:edit  ?:help  q:quit "
   end
 end

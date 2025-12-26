@@ -12,7 +12,7 @@ defmodule Albedo.Agents.DomainResearcher do
     accounting:
       ~w(ledger journal debit credit balance account transaction reconciliation gaap ifrs audit),
     authentication:
-      ~w(login logout session token oauth oidc sso password auth authentication authorization),
+      ~w(login logout token oauth oidc sso password auth authentication authorization),
     ecommerce: ~w(cart checkout order payment product inventory shipping discount coupon),
     payments: ~w(payment stripe charge refund subscription billing invoice pci),
     inventory: ~w(stock inventory warehouse product sku quantity fifo lifo),

@@ -72,6 +72,10 @@ defmodule Albedo.TUI do
     dispatch_confirm_mode(state, input, projects_dir)
   end
 
+  defp handle_input(%State{mode: :help} = state, input, _projects_dir) do
+    dispatch_help_mode(state, input)
+  end
+
   defp handle_input(state, input, projects_dir) do
     state
     |> dispatch_input(input, projects_dir)
@@ -151,7 +155,14 @@ defmodule Albedo.TUI do
   defp handle_char(state, "e", _projects_dir), do: handle_edit(state)
   defp handle_char(state, "x", _projects_dir), do: handle_delete(state)
   defp handle_char(state, "X", _projects_dir), do: handle_delete(state)
+  defp handle_char(state, "?", _projects_dir), do: State.enter_help_mode(state)
   defp handle_char(state, _, _projects_dir), do: state
+
+  defp dispatch_help_mode(state, :escape), do: State.exit_help_mode(state)
+  defp dispatch_help_mode(state, :enter), do: State.exit_help_mode(state)
+  defp dispatch_help_mode(state, {:char, "q"}), do: State.exit_help_mode(state)
+  defp dispatch_help_mode(state, {:char, "?"}), do: State.exit_help_mode(state)
+  defp dispatch_help_mode(state, _), do: state
 
   defp handle_enter(%State{active_panel: :projects} = state, projects_dir) do
     case State.current_project(state) do
@@ -261,49 +272,22 @@ defmodule Albedo.TUI do
   end
 
   defp handle_add_ticket(%State{data: data, project_dir: project_dir} = state) do
-    next_id = next_ticket_id(data.tickets)
+    attrs = %{title: "New ticket", type: :feature, priority: :medium}
 
-    new_ticket =
-      Tickets.Ticket.new(%{
-        id: next_id,
-        title: "New ticket #{next_id}",
-        type: :feature,
-        priority: :medium
-      })
+    case Tickets.add(data, attrs) do
+      {:ok, updated_data, ticket} ->
+        case Tickets.save(project_dir, updated_data) do
+          :ok ->
+            new_idx = length(updated_data.tickets) - 1
 
-    updated_tickets = data.tickets ++ [new_ticket]
-    updated_data = %{data | tickets: updated_tickets}
+            %{state | data: updated_data, selected_ticket: new_idx}
+            |> State.set_message("Added ticket ##{ticket.id}. Edit with 'e' to change details.")
 
-    case Tickets.save(project_dir, updated_data) do
-      :ok ->
-        new_idx = length(updated_tickets) - 1
-
-        %{state | data: updated_data, selected_ticket: new_idx}
-        |> State.set_message("Added ticket ##{next_id}. Edit with 'e' to change details.")
-
-      {:error, reason} ->
-        State.set_message(state, "Failed to add ticket: #{inspect(reason)}")
+          {:error, reason} ->
+            State.set_message(state, "Failed to save ticket: #{inspect(reason)}")
+        end
     end
   end
-
-  defp next_ticket_id(tickets) do
-    max_id =
-      tickets
-      |> Enum.map(& &1.id)
-      |> Enum.map(&parse_ticket_id/1)
-      |> Enum.max(fn -> 0 end)
-
-    to_string(max_id + 1)
-  end
-
-  defp parse_ticket_id(id) when is_binary(id) do
-    case Integer.parse(id) do
-      {num, _} -> num
-      :error -> 0
-    end
-  end
-
-  defp parse_ticket_id(_), do: 0
 
   defp enter_edit_mode(%State{data: nil} = state) do
     State.set_message(state, "No project loaded")
@@ -322,30 +306,38 @@ defmodule Albedo.TUI do
   defp save_current_field(%State{data: data} = state) do
     ticket = State.current_ticket(state)
     changes = State.get_edit_changes(state)
-    updated_ticket = Tickets.Ticket.edit(ticket, changes)
 
-    updated_tickets =
-      Enum.map(data.tickets, fn t ->
-        if t.id == ticket.id, do: updated_ticket, else: t
-      end)
+    case Tickets.edit(data, ticket.id, changes) do
+      {:ok, updated_data, _updated_ticket} ->
+        %{state | data: updated_data}
 
-    updated_data = %{data | tickets: updated_tickets}
-    %{state | data: updated_data}
+      {:error, :not_found} ->
+        state
+    end
   end
 
-  defp save_and_exit_edit(%State{project_dir: project_dir} = state, _projects_dir) do
-    state = save_current_field(state)
+  defp save_and_exit_edit(%State{data: data, project_dir: project_dir} = state, _projects_dir) do
+    ticket = State.current_ticket(state)
+    changes = State.get_edit_changes(state)
 
-    case Tickets.save(project_dir, state.data) do
-      :ok ->
+    case Tickets.edit(data, ticket.id, changes) do
+      {:ok, updated_data, _updated_ticket} ->
+        case Tickets.save(project_dir, updated_data) do
+          :ok ->
+            %{state | data: updated_data}
+            |> State.exit_edit_mode()
+            |> State.set_message("Ticket saved")
+
+          {:error, reason} ->
+            state
+            |> State.exit_edit_mode()
+            |> State.set_message("Save failed: #{inspect(reason)}")
+        end
+
+      {:error, :not_found} ->
         state
         |> State.exit_edit_mode()
-        |> State.set_message("Ticket saved")
-
-      {:error, reason} ->
-        state
-        |> State.exit_edit_mode()
-        |> State.set_message("Save failed: #{inspect(reason)}")
+        |> State.set_message("Ticket not found")
     end
   end
 
@@ -354,24 +346,17 @@ defmodule Albedo.TUI do
   end
 
   defp handle_delete_ticket(%State{data: data, project_dir: project_dir} = state) do
-    case State.current_ticket(state) do
-      nil ->
-        State.set_message(state, "No ticket selected")
+    with ticket when not is_nil(ticket) <- State.current_ticket(state),
+         {:ok, updated_data, _deleted} <- Tickets.delete(data, ticket.id),
+         :ok <- Tickets.save(project_dir, updated_data) do
+      new_idx = min(state.selected_ticket, max(0, length(updated_data.tickets) - 1))
 
-      ticket ->
-        updated_tickets = Enum.reject(data.tickets, &(&1.id == ticket.id))
-        updated_data = %{data | tickets: updated_tickets}
-
-        case Tickets.save(project_dir, updated_data) do
-          :ok ->
-            new_idx = min(state.selected_ticket, max(0, length(updated_tickets) - 1))
-
-            %{state | data: updated_data, selected_ticket: new_idx}
-            |> State.set_message("Deleted ticket ##{ticket.id}")
-
-          {:error, reason} ->
-            State.set_message(state, "Failed to delete: #{inspect(reason)}")
-        end
+      %{state | data: updated_data, selected_ticket: new_idx}
+      |> State.set_message("Deleted ticket ##{ticket.id}")
+    else
+      nil -> State.set_message(state, "No ticket selected")
+      {:error, :not_found} -> State.set_message(state, "Ticket not found")
+      {:error, reason} -> State.set_message(state, "Failed to save: #{inspect(reason)}")
     end
   end
 

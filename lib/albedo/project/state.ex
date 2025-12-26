@@ -3,6 +3,8 @@ defmodule Albedo.Project.State do
   Project state struct and state machine logic.
   """
 
+  alias Albedo.Utils.Id
+
   @type phase_status :: :pending | :in_progress | :completed | :failed | :skipped
 
   @type phase_state :: %{
@@ -100,7 +102,7 @@ defmodule Albedo.Project.State do
   """
   def new(codebase_path, task, opts \\ []) do
     now = DateTime.utc_now()
-    id = generate_id(task, opts[:project])
+    id = Id.generate_project_id(task, opts[:project])
     config = Albedo.Config.load!()
     project_dir = Path.join(Albedo.Config.projects_dir(config), id)
 
@@ -126,7 +128,7 @@ defmodule Albedo.Project.State do
   """
   def new_greenfield(project_name, task, opts \\ []) do
     now = DateTime.utc_now()
-    id = generate_id(task, opts[:project])
+    id = Id.generate_project_id(task, opts[:project])
     config = Albedo.Config.load!()
     project_dir = Path.join(Albedo.Config.projects_dir(config), id)
 
@@ -323,31 +325,6 @@ defmodule Albedo.Project.State do
   """
   def failed?(%__MODULE__{state: :failed}), do: true
   def failed?(%__MODULE__{}), do: false
-
-  defp generate_id(_task, custom_name) when is_binary(custom_name) and custom_name != "" do
-    custom_name
-    |> String.downcase()
-    |> slugify()
-  end
-
-  defp generate_id(task, _custom_name) do
-    date = Date.utc_today() |> Date.to_iso8601()
-    slug = task |> String.downcase() |> String.slice(0, 30) |> slugify()
-
-    suffix =
-      :erlang.unique_integer([:positive])
-      |> rem(10_000)
-      |> Integer.to_string()
-      |> String.pad_leading(4, "0")
-
-    "#{date}_#{slug}_#{suffix}"
-  end
-
-  defp slugify(string) do
-    string
-    |> String.replace(~r/[^a-z0-9]+/, "-")
-    |> String.trim("-")
-  end
 
   defp init_phases do
     @phases

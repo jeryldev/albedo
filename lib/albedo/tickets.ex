@@ -5,6 +5,7 @@ defmodule Albedo.Tickets do
   """
 
   alias Albedo.Tickets.Ticket
+  alias Albedo.Utils.Id
 
   @tickets_file "tickets.json"
   @version "1.0"
@@ -167,17 +168,7 @@ defmodule Albedo.Tickets do
   end
 
   defp compute_next_id(tickets) do
-    max_id =
-      tickets
-      |> Enum.map(fn t ->
-        case Integer.parse(t.id) do
-          {num, _} -> num
-          :error -> 0
-        end
-      end)
-      |> Enum.max(fn -> 0 end)
-
-    to_string(max_id + 1)
+    Id.next_ticket_id(tickets)
   end
 
   def reset_all(tickets_data) do

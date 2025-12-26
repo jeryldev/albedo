@@ -99,8 +99,21 @@ defmodule Albedo.CLI do
     cmd_init()
   end
 
+  defp run_command(["analyze"], _opts) do
+    print_error("Missing codebase path")
+    IO.puts("Usage: albedo analyze /path/to/codebase --task \"Description of what to build\"")
+    halt_with_error(1)
+  end
+
   defp run_command(["analyze", path | _], opts) do
     cmd_analyze(path, opts)
+  end
+
+  defp run_command(["resume"], _opts) do
+    print_error("Missing project path")
+    IO.puts("Usage: albedo resume /path/to/project")
+    IO.puts("   or: albedo resume ~/.albedo/projects/<project_id>")
+    halt_with_error(1)
   end
 
   defp run_command(["resume", project_path | _], _opts) do
@@ -111,8 +124,20 @@ defmodule Albedo.CLI do
     cmd_projects_dispatch(subcommand, opts)
   end
 
+  defp run_command(["show"], _opts) do
+    print_error("Missing project ID")
+    IO.puts("Usage: albedo show <project_id>")
+    halt_with_error(1)
+  end
+
   defp run_command(["show", project_id | _], _opts) do
     cmd_show(project_id)
+  end
+
+  defp run_command(["replan"], _opts) do
+    print_error("Missing project path")
+    IO.puts("Usage: albedo replan /path/to/project --task \"New task description\"")
+    halt_with_error(1)
   end
 
   defp run_command(["replan", project_path | _], opts) do
@@ -318,7 +343,11 @@ defmodule Albedo.CLI do
     end
   end
 
-  defp cmd_projects_dispatch([], _opts), do: cmd_projects_list()
+  defp cmd_projects_dispatch([], opts) do
+    if opts[:help], do: cmd_projects_help(), else: cmd_projects_list()
+  end
+
+  defp cmd_projects_dispatch(["help" | _], _opts), do: cmd_projects_help()
   defp cmd_projects_dispatch(["list" | _], _opts), do: cmd_projects_list()
 
   defp cmd_projects_dispatch(["create" | rest], opts) do
@@ -355,12 +384,65 @@ defmodule Albedo.CLI do
   defp cmd_projects_dispatch([unknown | _], _opts) do
     print_error("Unknown projects subcommand: #{unknown}")
     IO.puts("")
-    IO.puts("Available subcommands:")
-    IO.puts("  albedo projects                       List all projects")
-    IO.puts("  albedo projects create --task \"...\"   Create new project folder")
-    IO.puts("  albedo projects rename <id> <name>    Rename project folder")
-    IO.puts("  albedo projects delete <id> [--yes]   Delete project folder")
+    cmd_projects_help()
     halt_with_error(1)
+  end
+
+  defp cmd_projects_help do
+    Owl.IO.puts([
+      Owl.Data.tag("albedo projects", :cyan),
+      " - Manage analysis projects\n\n",
+      Owl.Data.tag("USAGE:", :yellow),
+      "\n    albedo projects [subcommand] [options]\n\n",
+      Owl.Data.tag("SUBCOMMANDS:", :yellow),
+      """
+
+          list                    List all projects (default)
+          create                  Create a new project folder
+          rename <id> <name>      Rename a project folder
+          delete <id>             Delete a project folder
+          help                    Show this help message
+
+      """,
+      Owl.Data.tag("OPTIONS:", :yellow),
+      """
+
+          -t, --task <desc>       Task description (for create)
+          -y, --yes               Skip confirmation (for delete)
+          -h, --help              Show this help message
+
+      """,
+      Owl.Data.tag("EXAMPLES:", :yellow),
+      """
+
+          # List all projects
+          albedo projects
+          albedo projects list
+
+          # Create a new project
+          albedo projects create --task "Add user authentication"
+          albedo projects create "Add auth feature"
+
+          # Rename a project
+          albedo projects rename 20250101-add-auth auth-v2
+
+          # Delete a project
+          albedo projects delete 20250101-add-auth
+          albedo projects delete 20250101-add-auth --yes
+
+      """,
+      Owl.Data.tag("PROJECT STRUCTURE:", :yellow),
+      """
+
+          Each project is stored in ~/.albedo/projects/<project_id>/
+
+          Project files:
+            project.json      Project state and metadata
+            tickets.json      Generated tickets
+            FEATURE.md        Feature documentation output
+            context/          Phase outputs (domain research, tech stack, etc.)
+      """
+    ])
   end
 
   defp cmd_projects_list do
@@ -589,6 +671,8 @@ defmodule Albedo.CLI do
     cmd_config(["show"])
   end
 
+  defp cmd_config(["help" | _]), do: cmd_config_help()
+
   defp cmd_config(["show" | _]) do
     print_header()
     config = Config.load!()
@@ -693,11 +777,54 @@ defmodule Albedo.CLI do
   defp cmd_config([unknown | _]) do
     print_error("Unknown config subcommand: #{unknown}")
     IO.puts("")
-    IO.puts("Available subcommands:")
-    IO.puts("  albedo config show         Show current configuration")
-    IO.puts("  albedo config set-provider Select LLM provider")
-    IO.puts("  albedo config set-key      Set API key for current provider")
+    cmd_config_help()
     halt_with_error(1)
+  end
+
+  defp cmd_config_help do
+    Owl.IO.puts([
+      Owl.Data.tag("albedo config", :cyan),
+      " - Manage configuration\n\n",
+      Owl.Data.tag("USAGE:", :yellow),
+      "\n    albedo config [subcommand]\n\n",
+      Owl.Data.tag("SUBCOMMANDS:", :yellow),
+      """
+
+          show                    Show current configuration (default)
+          set-provider            Select LLM provider interactively
+          set-key                 Set API key for current provider
+          help                    Show this help message
+
+      """,
+      Owl.Data.tag("EXAMPLES:", :yellow),
+      """
+
+          # Show current configuration
+          albedo config
+          albedo config show
+
+          # Change LLM provider (interactive)
+          albedo config set-provider
+
+          # Set API key (interactive)
+          albedo config set-key
+
+      """,
+      Owl.Data.tag("CONFIGURATION FILES:", :yellow),
+      """
+
+          ~/.albedo/config.toml     Configuration file
+          ~/.albedo/projects/       Project storage directory
+
+      """,
+      Owl.Data.tag("SUPPORTED PROVIDERS:", :yellow),
+      """
+
+          gemini      Google Gemini (default, free tier available)
+          claude      Anthropic Claude
+          openai      OpenAI GPT
+      """
+    ])
   end
 
   defp handle_set_key_confirm(confirm, shell_profile, env_var, export_line)
@@ -755,8 +882,10 @@ defmodule Albedo.CLI do
   end
 
   defp cmd_tickets([], opts) do
-    cmd_tickets(["list"], opts)
+    if opts[:help], do: cmd_tickets_help(), else: cmd_tickets(["list"], opts)
   end
+
+  defp cmd_tickets(["help" | _], _opts), do: cmd_tickets_help()
 
   defp cmd_tickets(["list" | _], opts) do
     print_header()
@@ -828,24 +957,128 @@ defmodule Albedo.CLI do
   defp cmd_tickets([unknown | _], _opts) do
     print_error("Unknown tickets subcommand: #{unknown}")
     IO.puts("")
-    IO.puts("Available subcommands:")
-    IO.puts("  albedo tickets                  List tickets from most recent project")
-    IO.puts("  albedo tickets --project <id>   List tickets from specific project")
-    IO.puts("  albedo tickets --status pending Filter by status")
-    IO.puts("  albedo tickets show <id>        Show ticket details")
-    IO.puts("  albedo tickets add \"title\"      Add new ticket")
-    IO.puts("  albedo tickets delete <id>      Delete ticket (with confirmation)")
-    IO.puts("  albedo tickets start <id>       Mark ticket as in_progress")
-    IO.puts("  albedo tickets done <id> [ids]  Mark tickets as completed")
-    IO.puts("  albedo tickets reset <id>       Reset ticket to pending")
-    IO.puts("  albedo tickets reset --all      Reset all tickets")
-    IO.puts("  albedo tickets edit <id> --priority <p> --points <n>  Edit ticket")
-
-    IO.puts(
-      "  albedo tickets export           Export tickets (--format json|csv|markdown|github)"
-    )
-
+    cmd_tickets_help()
     halt_with_error(1)
+  end
+
+  defp cmd_tickets_help do
+    Owl.IO.puts([
+      Owl.Data.tag("albedo tickets", :cyan),
+      " - Manage implementation tickets\n\n",
+      Owl.Data.tag("USAGE:", :yellow),
+      "\n    albedo tickets [subcommand] [options]\n\n",
+      Owl.Data.tag("SUBCOMMANDS:", :yellow),
+      """
+
+          list                    List all tickets (default)
+          show <id>               Show ticket details
+          add <title>             Add a new ticket
+          edit <id>               Edit ticket properties
+          delete <id> [ids...]    Delete ticket(s)
+          start <id>              Mark ticket as in-progress
+          done <id> [ids...]      Mark ticket(s) as completed
+          reset <id> [ids...]     Reset ticket(s) to pending
+          export                  Export tickets to various formats
+          help                    Show this help message
+
+      """,
+      Owl.Data.tag("OPTIONS:", :yellow),
+      """
+
+          -P, --project <id>      Target a specific project (default: latest)
+          --status <status>       Filter by status: pending, in_progress, completed
+          --json                  Output in JSON format (for show)
+          -y, --yes               Skip confirmation (for delete)
+          -h, --help              Show this help message
+
+      """,
+      Owl.Data.tag("ADD OPTIONS:", :yellow),
+      """
+
+          -t, --title <title>     Ticket title (required)
+          -d, --description <d>   Ticket description
+          -p, --priority <p>      Priority: urgent, high, medium (default), low, none
+          --points <n>            Story points: 1, 2, 3, 5, 8, 13
+          --type <type>           Type: feature (default), bugfix, chore, docs, test
+          --labels <labels>       Comma-separated labels
+
+      """,
+      Owl.Data.tag("EDIT OPTIONS:", :yellow),
+      """
+
+          --title <title>         Update title
+          --description <d>       Update description
+          --priority <p>          Update priority
+          --points <n>            Update story points
+          --status <status>       Update status
+          --type <type>           Update type
+          --labels <labels>       Update labels
+
+      """,
+      Owl.Data.tag("EXPORT OPTIONS:", :yellow),
+      """
+
+          -f, --format <fmt>      Format: json (default), csv, markdown, github
+          -o, --output <file>     Output file (default: stdout)
+          --status <status>       Filter by status
+
+      """,
+      Owl.Data.tag("EXAMPLES:", :yellow),
+      """
+
+          # List tickets
+          albedo tickets                         # From latest project
+          albedo tickets --project auth-feature  # From specific project
+          albedo tickets --status pending        # Filter by status
+
+          # Show ticket details
+          albedo tickets show 1
+          albedo tickets show 1 --json
+
+          # Add tickets
+          albedo tickets add "Implement login"
+          albedo tickets add "Fix bug" --type bugfix --priority high
+          albedo tickets add "Add tests" --points 3 --labels "testing,backend"
+
+          # Update status
+          albedo tickets start 1
+          albedo tickets done 1 2 3
+          albedo tickets reset 1
+          albedo tickets reset --all
+
+          # Edit tickets
+          albedo tickets edit 1 --title "New title"
+          albedo tickets edit 1 --priority high --points 5
+
+          # Delete tickets
+          albedo tickets delete 1
+          albedo tickets delete 1 2 3 --yes
+
+          # Export
+          albedo tickets export
+          albedo tickets export --format csv -o tickets.csv
+          albedo tickets export --format markdown
+          albedo tickets export --format github --status pending
+
+      """,
+      Owl.Data.tag("TICKET STATUSES:", :yellow),
+      """
+
+          pending       Not started (default)
+          in_progress   Currently being worked on
+          completed     Finished
+
+      """,
+      Owl.Data.tag("TICKET TYPES:", :yellow),
+      """
+
+          feature       New functionality (default)
+          bugfix        Bug fix
+          chore         Maintenance/housekeeping
+          docs          Documentation
+          test          Testing
+      """
+    ])
   end
 
   defp display_ticket(ticket, opts) do

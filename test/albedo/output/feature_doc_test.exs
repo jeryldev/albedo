@@ -206,7 +206,7 @@ defmodule Albedo.Output.FeatureDocTest do
         change_planning: %{content: "### Ticket #1: Setup\n\nDescription"}
       },
       clarifying_questions: [
-        %{question: "Auth method?", answer: "Session-based"}
+        %{question: "Auth method?", answer: "Token-based"}
       ]
     }
   end

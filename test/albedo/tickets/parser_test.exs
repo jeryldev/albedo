@@ -47,7 +47,7 @@ defmodule Albedo.Tickets.ParserTest do
         "labels": ["liveview", "frontend"],
         "acceptance_criteria": ["Login form displays", "Validation works"],
         "files": {
-          "create": ["lib/my_app_web/live/session_live.ex"],
+          "create": ["lib/my_app_web/live/login_live.ex"],
           "modify": []
         },
         "dependencies": {
@@ -136,7 +136,7 @@ defmodule Albedo.Tickets.ParserTest do
   #### Files to Create
   | File | Purpose |
   |------|---------|
-  | lib/my_app_web/live/session_live.ex | Login LiveView |
+  | lib/my_app_web/live/login_live.ex | Login LiveView |
 
   #### Acceptance Criteria
   - [ ] Login form displays

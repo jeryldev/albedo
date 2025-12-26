@@ -33,7 +33,7 @@ defmodule Albedo.TUI.State do
   ]
 
   @type panel :: :projects | :tickets | :detail
-  @type mode :: :normal | :command | :confirm | :edit | :input
+  @type mode :: :normal | :command | :confirm | :edit | :input | :help
 
   @editable_fields [:title, :description, :type, :priority, :estimate, :labels]
 
@@ -468,5 +468,13 @@ defmodule Albedo.TUI.State do
       end)
 
     %{state | projects: updated_projects}
+  end
+
+  def enter_help_mode(%__MODULE__{} = state) do
+    %{state | mode: :help}
+  end
+
+  def exit_help_mode(%__MODULE__{} = state) do
+    %{state | mode: :normal}
   end
 end

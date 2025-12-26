@@ -407,7 +407,7 @@ defmodule Albedo.Tickets.Parser do
       {"frontend", fn -> has_pattern?(all_files, ~r/_controller\.ex$|\.html\./) end},
       {"database", fn -> has_pattern?(all_files, ~r/migrations?\/|schema\.ex$/) end},
       {"test", fn -> has_pattern?(all_files, ~r/_test\.exs?$/) end},
-      {"auth", fn -> has_pattern?(all_text, ~r/auth|login|session|password|token/i) end}
+      {"auth", fn -> has_pattern?(all_text, ~r/auth|login|password|token/i) end}
     ]
 
     label_rules

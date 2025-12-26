@@ -11,7 +11,7 @@ defmodule Albedo.Agents.DomainResearcherTest do
     test "detects authentication domain" do
       assert detect_domain("Add user login functionality") == :authentication
       assert detect_domain("Implement OAuth authentication") == :authentication
-      assert detect_domain("Add session management") == :authentication
+      assert detect_domain("Add password reset") == :authentication
     end
 
     test "detects ecommerce domain" do
@@ -70,7 +70,7 @@ defmodule Albedo.Agents.DomainResearcherTest do
     accounting:
       ~w(ledger journal debit credit balance account transaction reconciliation gaap ifrs audit),
     authentication:
-      ~w(login logout session token oauth oidc sso password auth authentication authorization),
+      ~w(login logout token oauth oidc sso password auth authentication authorization),
     ecommerce: ~w(cart checkout order payment product inventory shipping discount coupon),
     payments: ~w(payment stripe charge refund subscription billing invoice pci),
     inventory: ~w(stock inventory warehouse product sku quantity fifo lifo),
