@@ -77,9 +77,7 @@ defmodule Albedo.TUI do
   end
 
   defp handle_input(state, input, projects_dir) do
-    state
-    |> dispatch_input(input, projects_dir)
-    |> State.clear_message()
+    dispatch_input(state, input, projects_dir)
   end
 
   defp dispatch_edit_input(state, :escape, _projects_dir) do
