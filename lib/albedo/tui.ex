@@ -460,7 +460,7 @@ defmodule Albedo.TUI do
     State.enter_input_mode(state, :new_project, "New project task: ")
   end
 
-  defp handle_add(%State{active_panel: :tickets} = state) do
+  defp handle_add(%State{active_panel: panel} = state) when panel in [:tickets, :detail] do
     handle_add_ticket(state)
   end
 
@@ -479,7 +479,7 @@ defmodule Albedo.TUI do
     end
   end
 
-  defp handle_edit(%State{active_panel: :tickets} = state) do
+  defp handle_edit(%State{active_panel: panel} = state) when panel in [:tickets, :detail] do
     enter_edit_mode(state)
   end
 
@@ -499,7 +499,7 @@ defmodule Albedo.TUI do
     end
   end
 
-  defp handle_delete(%State{active_panel: :tickets} = state) do
+  defp handle_delete(%State{active_panel: panel} = state) when panel in [:tickets, :detail] do
     handle_delete_ticket(state)
   end
 
