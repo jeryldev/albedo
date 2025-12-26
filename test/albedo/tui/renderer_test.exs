@@ -13,7 +13,7 @@ defmodule Albedo.TUI.RendererTest do
       output = capture_io(fn -> Renderer.render(state) end)
 
       assert is_binary(output)
-      assert output =~ "Albedo TUI"
+      assert output =~ "Projects"
     end
 
     test "renders with projects panel active" do

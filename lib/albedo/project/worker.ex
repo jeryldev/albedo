@@ -307,11 +307,22 @@ defmodule Albedo.Project.Worker do
 
   defp print_phase_start(state, phase) do
     phase_name = phase |> to_string() |> String.replace("_", " ") |> String.capitalize()
-    send_progress(state, "#{phase_name}...")
+    {current, total} = calculate_agent_progress(state, phase)
+    send_agent_progress(state, current, total, phase_name)
 
     unless silent?(state) do
       Owl.IO.puts(Owl.Data.tag("  ├─ #{phase_name}...", :light_black))
     end
+  end
+
+  defp calculate_agent_progress(state, current_phase) do
+    phases_to_run =
+      State.phases()
+      |> Enum.reject(fn phase -> state.phases[phase].status == :skipped end)
+
+    total = length(phases_to_run)
+    current = Enum.find_index(phases_to_run, &(&1 == current_phase)) + 1
+    {current, total}
   end
 
   defp print_phase_complete(state, phase) do
@@ -343,6 +354,16 @@ defmodule Albedo.Project.Worker do
     case state.config[:progress_pid] do
       pid when is_pid(pid) -> send(pid, {:operation_progress, message})
       _ -> :ok
+    end
+  end
+
+  defp send_agent_progress(state, current, total, agent_name) do
+    case state.config[:progress_pid] do
+      pid when is_pid(pid) ->
+        send(pid, {:agent_progress, current, total, agent_name})
+
+      _ ->
+        :ok
     end
   end
 

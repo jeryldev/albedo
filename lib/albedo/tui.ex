@@ -72,6 +72,11 @@ defmodule Albedo.TUI do
         state
         |> handle_operation_progress(message)
         |> run_loop(projects_dir, input_pid)
+
+      {:agent_progress, current, total, agent_name} ->
+        state
+        |> handle_agent_progress(current, total, agent_name)
+        |> run_loop(projects_dir, input_pid)
     end
   end
 
@@ -885,6 +890,12 @@ defmodule Albedo.TUI do
 
   defp handle_operation_progress(state, message) do
     State.add_modal_log(state, message)
+  end
+
+  defp handle_agent_progress(state, current, total, agent_name) do
+    state
+    |> State.update_agent_progress(current, total, agent_name)
+    |> State.add_modal_log("#{agent_name}...")
   end
 
   defp load_created_project(state, output_dir) do

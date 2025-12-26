@@ -12,27 +12,24 @@ defmodule Albedo.TUI.Renderer do
     bottom_left: "└",
     bottom_right: "┘",
     horizontal: "─",
-    vertical: "│",
-    t_right: "├",
-    t_left: "┤",
-    t_down: "┬",
-    t_up: "┴",
-    cross: "┼"
+    vertical: "│"
   }
 
   @colors %{
     reset: "\e[0m",
     bold: "\e[1m",
     dim: "\e[2m",
+    black: "\e[30m",
     red: "\e[31m",
     green: "\e[32m",
     yellow: "\e[33m",
-    blue: "\e[34m",
     magenta: "\e[35m",
-    cyan: "\e[36m",
     white: "\e[37m",
     bg_blue: "\e[44m",
-    bg_cyan: "\e[46m"
+    bg_cyan: "\e[46m",
+    # Kanagawa colors (24-bit true color)
+    kanagawa_orange: "\e[38;2;255;160;102m",
+    bg_kanagawa_sky_blue: "\e[48;2;127;180;202m"
   }
 
   @doc """
@@ -76,7 +73,7 @@ defmodule Albedo.TUI.Renderer do
   end
 
   @help_content [
-    {:header, "Albedo TUI - Keyboard Shortcuts"},
+    {:header, "Keyboard Shortcuts"},
     {:blank},
     {:section, "Navigation"},
     {:key, "j / ↓", "Move down"},
@@ -127,10 +124,10 @@ defmodule Albedo.TUI.Renderer do
 
     cond do
       row == 1 ->
-        title = " Albedo TUI Help "
+        title = " Help "
 
         @colors.bold <>
-          @colors.cyan <> String.pad_trailing(title, width) <> @colors.reset
+          @colors.green <> String.pad_trailing(title, width) <> @colors.reset
 
       row == 2 or row == height - 1 ->
         @colors.dim <> String.duplicate("─", width) <> @colors.reset
@@ -155,7 +152,7 @@ defmodule Albedo.TUI.Renderer do
 
       {:header, text} ->
         @colors.bold <>
-          @colors.cyan <>
+          @colors.green <>
           String.pad_trailing("  " <> text, width) <> @colors.reset
 
       {:blank} ->
@@ -170,7 +167,7 @@ defmodule Albedo.TUI.Renderer do
         padded_key = String.pad_trailing(key, 16)
 
         "    " <>
-          @colors.cyan <>
+          @colors.green <>
           padded_key <>
           @colors.reset <>
           String.pad_trailing(desc, width - 20)
@@ -230,14 +227,14 @@ defmodule Albedo.TUI.Renderer do
     right_bar = bar_width - title_len - left_bar
 
     border =
-      @colors.cyan <>
+      @colors.green <>
         @border_chars.top_left <>
         String.duplicate(@border_chars.horizontal, left_bar) <>
         @colors.bold <>
         @colors.white <>
         title <>
         @colors.reset <>
-        @colors.cyan <>
+        @colors.green <>
         String.duplicate(@border_chars.horizontal, right_bar) <>
         @border_chars.top_right <>
         @colors.reset
@@ -264,20 +261,20 @@ defmodule Albedo.TUI.Renderer do
 
     status_color =
       case state.modal_data.phase do
-        :input -> @colors.cyan
+        :input -> @colors.green
         :running -> @colors.yellow
         :completed -> @colors.green
         :failed -> @colors.red
       end
 
     border =
-      @colors.cyan <>
+      @colors.green <>
         @border_chars.bottom_left <>
         String.duplicate(@border_chars.horizontal, left_bar) <>
         status_color <>
         hint <>
         @colors.reset <>
-        @colors.cyan <>
+        @colors.green <>
         String.duplicate(@border_chars.horizontal, right_bar) <>
         @border_chars.bottom_right <>
         @colors.reset
@@ -302,13 +299,13 @@ defmodule Albedo.TUI.Renderer do
     padded_content = String.pad_trailing(content, inner_width + color_escape_length(content))
 
     line =
-      @colors.cyan <>
+      @colors.green <>
         @border_chars.vertical <>
         @colors.reset <>
         " " <>
         padded_content <>
         " " <>
-        @colors.cyan <>
+        @colors.green <>
         @border_chars.vertical <>
         @colors.reset
 
@@ -429,20 +426,33 @@ defmodule Albedo.TUI.Renderer do
       @colors.bg_cyan <> cursor_char <> @colors.reset <> after_char
   end
 
-  defp build_log_header(data, scroll) do
-    log_count = length(data.logs)
-    scroll_info = if log_count > 0, do: " (#{scroll + 1}/#{log_count})", else: ""
+  defp build_log_header(data, _scroll) do
     {status_color, status_text} = phase_display(data.phase)
-    status_color <> @colors.bold <> status_text <> scroll_info <> @colors.reset
+
+    progress_info =
+      if data.phase == :running and data.total_agents > 0 do
+        " (#{data.current_agent}/#{data.total_agents})"
+      else
+        ""
+      end
+
+    agent_info =
+      if data.phase == :running and data.agent_name do
+        " #{data.agent_name}"
+      else
+        ""
+      end
+
+    status_color <> @colors.bold <> status_text <> progress_info <> agent_info <> @colors.reset
   end
 
-  defp phase_display(:input), do: {@colors.cyan, "Progress"}
+  defp phase_display(:input), do: {@colors.green, "Progress"}
   defp phase_display(:running), do: {@colors.yellow, "Running..."}
   defp phase_display(:completed), do: {@colors.green, "Completed"}
   defp phase_display(:failed), do: {@colors.red, "Failed"}
 
   defp build_field_label(label, is_active) do
-    label_color = if is_active, do: @colors.cyan <> @colors.bold, else: @colors.dim
+    label_color = if is_active, do: @colors.green <> @colors.bold, else: @colors.dim
     label_color <> label <> @colors.reset
   end
 
@@ -454,12 +464,6 @@ defmodule Albedo.TUI.Renderer do
 
   defp build_line(row, state, width, height) do
     cond do
-      row == 1 ->
-        build_header_line(state, width)
-
-      row == 2 ->
-        String.duplicate(" ", width)
-
       row == height - 1 ->
         build_status_line(state, width)
 
@@ -469,17 +473,6 @@ defmodule Albedo.TUI.Renderer do
       true ->
         build_panel_line(row, state, width, height)
     end
-  end
-
-  defp build_header_line(state, width) do
-    title = " Albedo TUI "
-
-    project_info =
-      if state.data, do: " │ #{state.data.project_id}", else: ""
-
-    header = title <> project_info
-
-    @colors.bold <> @colors.cyan <> String.pad_trailing(header, width) <> @colors.reset
   end
 
   defp build_status_line(state, width) do
@@ -530,8 +523,8 @@ defmodule Albedo.TUI.Renderer do
     left_width = max(30, div(width, 3))
     right_width = width - left_width
 
-    panel_start = 3
-    panel_height = height - 4
+    panel_start = 1
+    panel_height = height - 2
     section_height = div(panel_height, 3)
 
     panel_row = row - panel_start + 1
@@ -568,11 +561,11 @@ defmodule Albedo.TUI.Renderer do
 
   defp build_projects_line(row, state, width, height) do
     is_active = state.active_panel == :projects
-    border_color = if is_active, do: @colors.cyan, else: @colors.dim
+    border_color = if is_active, do: @colors.kanagawa_orange, else: @colors.white
 
     cond do
       row == 1 ->
-        build_top_border(" Projects ", width, border_color, is_active)
+        build_top_border(" [1] Projects ", width, border_color, is_active)
 
       row == height ->
         build_bottom_border(width, border_color)
@@ -599,21 +592,25 @@ defmodule Albedo.TUI.Renderer do
   end
 
   defp build_project_item(project, width, is_selected) do
-    bg = if is_selected, do: @colors.bg_blue, else: ""
-    state_color = project_state_color(project.state)
-    indicator = if is_selected, do: "▶ ", else: "  "
+    bg = if is_selected, do: @colors.bg_kanagawa_sky_blue <> @colors.black, else: ""
+    state_indicator = project_state_indicator(project.state)
     id = String.slice(project.id, 0, width - 4)
 
-    bg <> indicator <> state_color <> String.pad_trailing(id, width - 2) <> @colors.reset
+    bg <> " " <> state_indicator <> " " <> String.pad_trailing(id, width - 3) <> @colors.reset
   end
+
+  defp project_state_indicator("completed"), do: "✓"
+  defp project_state_indicator("failed"), do: "✗"
+  defp project_state_indicator("paused"), do: "⏸"
+  defp project_state_indicator(_), do: "○"
 
   defp build_tickets_line(row, state, width, height) do
     is_active = state.active_panel == :tickets
-    border_color = if is_active, do: @colors.cyan, else: @colors.dim
+    border_color = if is_active, do: @colors.kanagawa_orange, else: @colors.white
 
     cond do
       row == 1 ->
-        build_top_border(" Tickets ", width, border_color, is_active)
+        build_top_border(" [2] Tickets ", width, border_color, is_active)
 
       row == height ->
         build_bottom_border(width, border_color)
@@ -649,36 +646,25 @@ defmodule Albedo.TUI.Renderer do
   end
 
   defp build_ticket_item(ticket, width, is_selected) do
-    bg = if is_selected, do: @colors.bg_blue, else: ""
+    bg = if is_selected, do: @colors.bg_kanagawa_sky_blue <> @colors.black, else: ""
     status_ind = status_indicator(ticket.status)
-    status_col = status_color(ticket.status)
 
     points = if ticket.estimate, do: " [#{ticket.estimate}]", else: ""
     points_len = String.length(points)
-    id_str = String.pad_leading(ticket.id, 2)
-    prefix_len = 5
+    prefix_len = 3
     title_width = max(0, width - prefix_len - points_len)
     title = String.pad_trailing(String.slice(ticket.title, 0, title_width), title_width)
 
-    bg <>
-      id_str <>
-      " " <>
-      status_col <>
-      status_ind <>
-      @colors.reset <>
-      bg <>
-      " " <>
-      title <>
-      @colors.dim <> points <> @colors.reset
+    bg <> " " <> status_ind <> " " <> title <> points <> @colors.reset
   end
 
   defp build_research_line(row, state, width, height) do
     is_active = state.active_panel == :research
-    border_color = if is_active, do: @colors.cyan, else: @colors.dim
+    border_color = if is_active, do: @colors.kanagawa_orange, else: @colors.white
 
     cond do
       row == 1 ->
-        build_top_border(" Research ", width, border_color, is_active)
+        build_top_border(" [3] Research ", width, border_color, is_active)
 
       row == height ->
         build_bottom_border(width, border_color)
@@ -718,19 +704,17 @@ defmodule Albedo.TUI.Renderer do
   end
 
   defp build_research_item(file, width, is_selected) do
-    bg = if is_selected, do: @colors.bg_blue, else: ""
-    type_indicator = if file.type == :markdown, do: "📄", else: "📋"
-    indicator = if is_selected, do: "▶ ", else: "  "
-    name = String.slice(file.name, 0, width - 6)
+    bg = if is_selected, do: @colors.bg_kanagawa_sky_blue <> @colors.black, else: ""
+    type_indicator = if file.type == :markdown, do: "md", else: "js"
+    name = String.slice(file.name, 0, width - 5)
 
-    bg <>
-      indicator <> type_indicator <> " " <> String.pad_trailing(name, width - 5) <> @colors.reset
+    bg <> " " <> type_indicator <> " " <> String.pad_trailing(name, width - 4) <> @colors.reset
   end
 
   defp build_right_panel_char(panel_row, state, width, height) do
     is_active = state.active_panel == :detail or state.mode == :edit
-    border_color = if is_active, do: @colors.cyan, else: @colors.dim
-    title = if state.mode == :edit, do: " Edit Ticket ", else: " Detail "
+    border_color = if is_active, do: @colors.kanagawa_orange, else: @colors.white
+    title = if state.mode == :edit, do: " Edit Ticket ", else: " [4] Detail "
 
     cond do
       panel_row <= 0 or panel_row > height ->
@@ -784,7 +768,7 @@ defmodule Albedo.TUI.Renderer do
 
   defp build_edit_row(0, _state, ticket, width) do
     @colors.bold <>
-      @colors.cyan <> String.pad_trailing("Editing ##{ticket.id}", width) <> @colors.reset
+      @colors.green <> String.pad_trailing("Editing ##{ticket.id}", width) <> @colors.reset
   end
 
   defp build_edit_row(1, _state, _ticket, width), do: String.duplicate(" ", width)
@@ -833,7 +817,7 @@ defmodule Albedo.TUI.Renderer do
     label = field_label(field)
 
     if is_active do
-      @colors.cyan <> @colors.bold <> String.pad_trailing(label, width) <> @colors.reset
+      @colors.green <> @colors.bold <> String.pad_trailing(label, width) <> @colors.reset
     else
       @colors.dim <> String.pad_trailing(label, width) <> @colors.reset
     end
@@ -983,7 +967,7 @@ defmodule Albedo.TUI.Renderer do
 
   defp render_file_line_to_string({:header, text}, width) do
     content_width = width - 1
-    " " <> @colors.bold <> @colors.cyan <> pad_content(text, content_width) <> @colors.reset
+    " " <> @colors.bold <> @colors.green <> pad_content(text, content_width) <> @colors.reset
   end
 
   defp render_file_line_to_string({:blank}, width) do
@@ -992,7 +976,7 @@ defmodule Albedo.TUI.Renderer do
 
   defp render_file_line_to_string({:md_h1, text}, width) do
     content_width = width - 1
-    " " <> @colors.bold <> @colors.cyan <> pad_content(text, content_width) <> @colors.reset
+    " " <> @colors.bold <> @colors.green <> pad_content(text, content_width) <> @colors.reset
   end
 
   defp render_file_line_to_string({:md_h2, text}, width) do
@@ -1036,7 +1020,7 @@ defmodule Albedo.TUI.Renderer do
 
   defp render_detail_line_to_string({:header, text}, width) do
     content_width = width - 1
-    " " <> @colors.bold <> @colors.cyan <> pad_content(text, content_width) <> @colors.reset
+    " " <> @colors.bold <> @colors.green <> pad_content(text, content_width) <> @colors.reset
   end
 
   defp render_detail_line_to_string({:blank}, width) do
@@ -1045,7 +1029,7 @@ defmodule Albedo.TUI.Renderer do
 
   defp render_detail_line_to_string({:section, title}, width) do
     content_width = width - 1
-    " " <> @colors.cyan <> @colors.bold <> pad_content(title, content_width) <> @colors.reset
+    " " <> @colors.green <> @colors.bold <> pad_content(title, content_width) <> @colors.reset
   end
 
   defp render_detail_line_to_string({:subsection, title}, width) do
@@ -1075,7 +1059,7 @@ defmodule Albedo.TUI.Renderer do
   end
 
   defp build_top_border(title, width, border_color, is_active) do
-    title_color = if is_active, do: @colors.bold <> @colors.cyan, else: @colors.dim
+    title_color = if is_active, do: @colors.bold <> @colors.green, else: @colors.white
     bar_width = width - 2
     title_len = String.length(title)
     left_bar = div(bar_width - title_len, 2)
@@ -1097,11 +1081,6 @@ defmodule Albedo.TUI.Renderer do
       String.duplicate(@border_chars.horizontal, width - 2) <>
       @border_chars.bottom_right <> @colors.reset
   end
-
-  defp project_state_color("completed"), do: @colors.green
-  defp project_state_color("failed"), do: @colors.red
-  defp project_state_color("paused"), do: @colors.yellow
-  defp project_state_color(_), do: @colors.dim
 
   defp status_indicator(:pending), do: "○"
   defp status_indicator(:in_progress), do: "●"

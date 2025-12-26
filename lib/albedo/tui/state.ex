@@ -61,7 +61,10 @@ defmodule Albedo.TUI.State do
           active_field: :name | :task,
           cursor: non_neg_integer(),
           logs: [String.t()],
-          result: map() | nil
+          result: map() | nil,
+          current_agent: non_neg_integer(),
+          total_agents: non_neg_integer(),
+          agent_name: String.t() | nil
         }
 
   @type t :: %__MODULE__{
@@ -598,7 +601,10 @@ defmodule Albedo.TUI.State do
       active_field: :name,
       cursor: 0,
       logs: [],
-      result: nil
+      result: nil,
+      current_agent: 0,
+      total_agents: 0,
+      agent_name: nil
     }
 
     %{
@@ -627,6 +633,14 @@ defmodule Albedo.TUI.State do
 
   def add_modal_log(%__MODULE__{modal_data: data} = state, log) do
     updated_data = %{data | logs: data.logs ++ [log]}
+    %{state | modal_data: updated_data}
+  end
+
+  def update_agent_progress(%__MODULE__{modal_data: nil} = state, _current, _total, _name),
+    do: state
+
+  def update_agent_progress(%__MODULE__{modal_data: data} = state, current, total, name) do
+    updated_data = %{data | current_agent: current, total_agents: total, agent_name: name}
     %{state | modal_data: updated_data}
   end
 
