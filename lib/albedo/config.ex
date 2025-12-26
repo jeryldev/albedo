@@ -42,7 +42,6 @@ defmodule Albedo.Config do
 
   def config_dir, do: @config_dir
   def config_file, do: @config_file
-  def sessions_dir, do: Path.join(@config_dir, "sessions")
   def projects_dir, do: Path.join(@config_dir, "projects")
 
   def valid_providers, do: Map.keys(@providers)
@@ -140,15 +139,6 @@ defmodule Albedo.Config do
   end
 
   @doc """
-  Get the session directory, expanded.
-  Deprecated: Use projects_dir/1 instead.
-  """
-  def session_dir(config) do
-    dir = get(config, ["output", "session_dir"]) || "~/.albedo/sessions"
-    Path.expand(dir)
-  end
-
-  @doc """
   Get the projects directory, expanded.
   """
   def projects_dir(config) do
@@ -179,7 +169,6 @@ defmodule Albedo.Config do
   def init do
     with :ok <- ensure_dir(@config_dir),
          :ok <- ensure_dir(projects_dir()),
-         :ok <- ensure_dir(sessions_dir()),
          :ok <- write_default_config() do
       {:ok, @config_file}
     end

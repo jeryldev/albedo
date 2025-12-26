@@ -1,6 +1,6 @@
 defmodule Albedo.Tickets do
   @moduledoc """
-  Ticket management for Albedo sessions.
+  Ticket management for Albedo projects.
   Handles loading, saving, filtering, and status updates for tickets.
   """
 
@@ -11,7 +11,7 @@ defmodule Albedo.Tickets do
 
   @type tickets_data :: %{
           version: String.t(),
-          session_id: String.t(),
+          project_id: String.t(),
           project_name: String.t() | nil,
           task_description: String.t(),
           created_at: String.t(),
@@ -29,8 +29,8 @@ defmodule Albedo.Tickets do
           completed_points: non_neg_integer()
         }
 
-  def load(session_dir) do
-    path = Path.join(session_dir, @tickets_file)
+  def load(project_dir) do
+    path = Path.join(project_dir, @tickets_file)
 
     case File.read(path) do
       {:ok, content} ->
@@ -47,8 +47,8 @@ defmodule Albedo.Tickets do
     end
   end
 
-  def save(session_dir, tickets_data) do
-    path = Path.join(session_dir, @tickets_file)
+  def save(project_dir, tickets_data) do
+    path = Path.join(project_dir, @tickets_file)
     updated_data = %{tickets_data | updated_at: DateTime.utc_now() |> DateTime.to_iso8601()}
     json = tickets_data_to_json(updated_data)
 
@@ -61,12 +61,12 @@ defmodule Albedo.Tickets do
     end
   end
 
-  def new(session_id, task, tickets, opts \\ []) do
+  def new(project_id, task, tickets, opts \\ []) do
     now = DateTime.utc_now() |> DateTime.to_iso8601()
 
     data = %{
       version: @version,
-      session_id: session_id,
+      project_id: project_id,
       project_name: Keyword.get(opts, :project_name),
       task_description: task,
       created_at: now,
@@ -251,7 +251,7 @@ defmodule Albedo.Tickets do
   defp tickets_data_to_json(data) do
     %{
       "version" => data.version,
-      "session_id" => data.session_id,
+      "project_id" => data.project_id,
       "project_name" => data.project_name,
       "task_description" => data.task_description,
       "created_at" => data.created_at,
@@ -275,7 +275,7 @@ defmodule Albedo.Tickets do
   defp from_json(data) do
     %{
       version: data["version"] || @version,
-      session_id: data["session_id"],
+      project_id: data["project_id"] || data["session_id"],
       project_name: data["project_name"],
       task_description: data["task_description"],
       created_at: data["created_at"],

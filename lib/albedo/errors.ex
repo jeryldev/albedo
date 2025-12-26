@@ -21,12 +21,12 @@ defmodule Albedo.Errors do
     end
   end
 
-  defmodule SessionError do
-    defexception [:session_id, :reason]
+  defmodule ProjectError do
+    defexception [:project_id, :reason]
 
     @impl true
-    def message(%{session_id: id, reason: reason}) do
-      "Session #{id} error: #{inspect(reason)}"
+    def message(%{project_id: id, reason: reason}) do
+      "Project #{id} error: #{inspect(reason)}"
     end
   end
 

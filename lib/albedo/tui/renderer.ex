@@ -80,7 +80,7 @@ defmodule Albedo.TUI.Renderer do
     title = " Albedo TUI "
 
     project_info =
-      if state.data, do: " │ #{state.data.project_id || state.data.session_id}", else: ""
+      if state.data, do: " │ #{state.data.project_id}", else: ""
 
     header = title <> project_info
 

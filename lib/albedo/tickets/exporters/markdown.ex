@@ -15,7 +15,7 @@ defmodule Albedo.Tickets.Exporters.Markdown do
     content = """
     # #{tickets_data.task_description || "Tickets"}
 
-    **Session:** #{tickets_data.session_id}
+    **Project:** #{tickets_data.project_id}
     #{if tickets_data.project_name, do: "**Project:** #{tickets_data.project_name}\n", else: ""}
     ## Summary
 

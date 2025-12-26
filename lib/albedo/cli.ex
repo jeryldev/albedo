@@ -39,7 +39,6 @@ defmodule Albedo.CLI do
           database: :string,
           name: :string,
           project: :string,
-          session: :string,
           status: :string,
           json: :boolean,
           format: :string,
@@ -60,7 +59,6 @@ defmodule Albedo.CLI do
           i: :interactive,
           n: :name,
           P: :project,
-          s: :session,
           f: :format,
           o: :output,
           p: :priority,
@@ -113,10 +111,6 @@ defmodule Albedo.CLI do
     cmd_projects_dispatch(subcommand, opts)
   end
 
-  defp run_command(["sessions" | subcommand], opts) do
-    cmd_projects_dispatch(subcommand, opts)
-  end
-
   defp run_command(["show", project_id | _], _opts) do
     cmd_show(project_id)
   end
@@ -148,7 +142,7 @@ defmodule Albedo.CLI do
     {extra_opts, remaining, _} =
       OptionParser.parse(subcommand,
         strict: [
-          session: :string,
+          project: :string,
           status: :string,
           json: :boolean,
           format: :string,
@@ -163,7 +157,7 @@ defmodule Albedo.CLI do
           yes: :boolean
         ],
         aliases: [
-          s: :session,
+          P: :project,
           f: :format,
           o: :output,
           p: :priority,
@@ -769,9 +763,9 @@ defmodule Albedo.CLI do
 
   defp cmd_tickets(["list" | _], opts) do
     print_header()
-    session_dir = resolve_project_dir(opts)
+    project_dir = resolve_project_dir(opts)
 
-    case Tickets.load(session_dir) do
+    case Tickets.load(project_dir) do
       {:ok, data} ->
         tickets = Tickets.list(data, Keyword.take(opts, [:status]))
         print_ticket_list(data, tickets)
@@ -789,9 +783,9 @@ defmodule Albedo.CLI do
 
   defp cmd_tickets(["show", id | _], opts) do
     print_header()
-    session_dir = resolve_project_dir(opts)
+    project_dir = resolve_project_dir(opts)
 
-    with {:ok, data} <- load_tickets_data(session_dir),
+    with {:ok, data} <- load_tickets_data(project_dir),
          {:ok, ticket} <- fetch_ticket(data, id) do
       display_ticket(ticket, opts)
     end
@@ -866,26 +860,26 @@ defmodule Albedo.CLI do
   end
 
   defp update_ticket_status(id, action, opts) do
-    session_dir = resolve_project_dir(opts)
+    project_dir = resolve_project_dir(opts)
 
-    with {:ok, data} <- load_tickets_data(session_dir),
+    with {:ok, data} <- load_tickets_data(project_dir),
          {:ok, updated_data, ticket} <- apply_ticket_action(data, id, action),
-         :ok <- save_tickets_data(session_dir, updated_data) do
+         :ok <- save_tickets_data(project_dir, updated_data) do
       print_success("Ticket ##{id} #{action_label(action)}: #{ticket.title}")
     end
   end
 
   defp reset_all_tickets(opts) do
-    session_dir = resolve_project_dir(opts)
+    project_dir = resolve_project_dir(opts)
 
-    with {:ok, data} <- load_tickets_data(session_dir),
-         :ok <- save_tickets_data(session_dir, Tickets.reset_all(data)) do
+    with {:ok, data} <- load_tickets_data(project_dir),
+         :ok <- save_tickets_data(project_dir, Tickets.reset_all(data)) do
       print_success("All tickets reset to pending")
     end
   end
 
-  defp load_tickets_data(session_dir) do
-    case Tickets.load(session_dir) do
+  defp load_tickets_data(project_dir) do
+    case Tickets.load(project_dir) do
       {:ok, data} ->
         {:ok, data}
 
@@ -931,8 +925,8 @@ defmodule Albedo.CLI do
   defp action_label(:complete), do: "completed"
   defp action_label(:reset), do: "reset"
 
-  defp save_tickets_data(session_dir, data) do
-    case Tickets.save(session_dir, data) do
+  defp save_tickets_data(project_dir, data) do
+    case Tickets.save(project_dir, data) do
       :ok ->
         :ok
 
@@ -966,7 +960,7 @@ defmodule Albedo.CLI do
   end
 
   defp add_ticket(title, opts) do
-    session_dir = resolve_project_dir(opts)
+    project_dir = resolve_project_dir(opts)
 
     attrs = %{
       title: title,
@@ -977,9 +971,9 @@ defmodule Albedo.CLI do
       labels: opts[:labels]
     }
 
-    {:ok, data} = load_tickets_or_error(session_dir)
+    {:ok, data} = load_tickets_or_error(project_dir)
     {:ok, updated_data, ticket} = Tickets.add(data, attrs)
-    :ok = save_tickets_or_error(session_dir, updated_data)
+    :ok = save_tickets_or_error(project_dir, updated_data)
     print_add_success(ticket)
   end
 
@@ -998,8 +992,8 @@ defmodule Albedo.CLI do
     if details != [], do: IO.puts("  #{Enum.join(details, ", ")}")
   end
 
-  defp load_tickets_or_error(session_dir) do
-    case Tickets.load(session_dir) do
+  defp load_tickets_or_error(project_dir) do
+    case Tickets.load(project_dir) do
       {:ok, data} ->
         {:ok, data}
 
@@ -1014,8 +1008,8 @@ defmodule Albedo.CLI do
     end
   end
 
-  defp save_tickets_or_error(session_dir, data) do
-    case Tickets.save(session_dir, data) do
+  defp save_tickets_or_error(project_dir, data) do
+    case Tickets.save(project_dir, data) do
       :ok ->
         :ok
 
@@ -1040,15 +1034,15 @@ defmodule Albedo.CLI do
   end
 
   defp delete_tickets(ids, opts) do
-    session_dir = resolve_project_dir(opts)
+    project_dir = resolve_project_dir(opts)
     skip_confirm = opts[:yes] == true
 
-    {:ok, data} = load_tickets_or_error(session_dir)
+    {:ok, data} = load_tickets_or_error(project_dir)
     tickets_to_delete = find_tickets_to_delete(data, ids)
     validate_tickets_found(tickets_to_delete)
 
     if confirm_deletion(tickets_to_delete, skip_confirm) do
-      execute_deletion(data, ids, session_dir)
+      execute_deletion(data, ids, project_dir)
     else
       IO.puts("Cancelled")
     end
@@ -1077,7 +1071,7 @@ defmodule Albedo.CLI do
     response in ["y", "yes"]
   end
 
-  defp execute_deletion(data, ids, session_dir) do
+  defp execute_deletion(data, ids, project_dir) do
     {final_data, deleted_count} =
       Enum.reduce(ids, {data, 0}, fn id, {acc_data, count} ->
         case Tickets.delete(acc_data, id) do
@@ -1086,7 +1080,7 @@ defmodule Albedo.CLI do
         end
       end)
 
-    :ok = save_tickets_or_error(session_dir, final_data)
+    :ok = save_tickets_or_error(project_dir, final_data)
     print_success("Deleted #{deleted_count} ticket(s)")
   end
 
@@ -1098,12 +1092,12 @@ defmodule Albedo.CLI do
       halt_with_error(1)
     end
 
-    session_dir = resolve_project_dir(opts)
-    {:ok, data} = load_tickets_or_error(session_dir)
+    project_dir = resolve_project_dir(opts)
+    {:ok, data} = load_tickets_or_error(project_dir)
 
     case Tickets.edit(data, id, changes) do
       {:ok, updated_data, ticket} ->
-        :ok = save_tickets_or_error(session_dir, updated_data)
+        :ok = save_tickets_or_error(project_dir, updated_data)
         print_edit_success(id, ticket, changes)
 
       {:error, :not_found} ->
@@ -1168,10 +1162,10 @@ defmodule Albedo.CLI do
 
   defp export_tickets(opts) do
     print_header()
-    session_dir = resolve_project_dir(opts)
+    project_dir = resolve_project_dir(opts)
 
     with {:ok, format} <- parse_export_format(opts[:format] || "json"),
-         {:ok, data} <- load_tickets_data(session_dir),
+         {:ok, data} <- load_tickets_data(project_dir),
          {:ok, content} <- do_export(data, format, opts) do
       write_export_output(content, data, format, opts[:output])
     end
@@ -1219,7 +1213,7 @@ defmodule Albedo.CLI do
   end
 
   defp resolve_project_dir(opts) do
-    case opts[:project] || opts[:session] do
+    case opts[:project] do
       nil ->
         config = Config.load!()
         projects_dir = Config.projects_dir(config)
@@ -1241,7 +1235,7 @@ defmodule Albedo.CLI do
   end
 
   defp print_ticket_list(data, tickets) do
-    IO.puts("Project: #{data.project_id || data.session_id}")
+    IO.puts("Project: #{data.project_id}")
     IO.puts("Task: #{String.slice(data.task_description || "", 0, 60)}")
     print_separator()
     IO.puts("")

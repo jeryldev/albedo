@@ -17,7 +17,7 @@ defmodule Albedo.Tickets.Exporters.GitHub do
 
     output = %{
       "source" => "albedo",
-      "session_id" => tickets_data.session_id,
+      "project_id" => tickets_data.project_id,
       "exported_at" => DateTime.utc_now() |> DateTime.to_iso8601(),
       "issues" => issues
     }

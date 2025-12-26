@@ -15,7 +15,7 @@ defmodule Albedo.Tickets.Exporters.JSON do
 
     output = %{
       "version" => tickets_data.version,
-      "session_id" => tickets_data.session_id,
+      "project_id" => tickets_data.project_id,
       "project_name" => tickets_data.project_name,
       "task_description" => tickets_data.task_description,
       "exported_at" => DateTime.utc_now() |> DateTime.to_iso8601(),

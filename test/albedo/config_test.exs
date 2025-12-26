@@ -8,7 +8,7 @@ defmodule Albedo.ConfigTest do
       assert {:ok, config} = Config.load()
       # Provider can be any valid value (gemini, claude, openai)
       assert config["llm"]["provider"] in ["gemini", "claude", "openai"]
-      assert config["output"]["session_dir"] == "~/.albedo/sessions"
+      assert config["output"]["projects_dir"] == "~/.albedo/projects"
     end
   end
 

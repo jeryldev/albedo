@@ -13,7 +13,7 @@ defmodule Albedo.TicketsTest do
       File.rm_rf!(@test_dir)
     end)
 
-    {:ok, session_dir: @test_dir}
+    {:ok, project_dir: @test_dir}
   end
 
   describe "new/3" do
@@ -23,10 +23,10 @@ defmodule Albedo.TicketsTest do
         Ticket.new(%{id: "2", title: "Ticket 2", estimate: 5})
       ]
 
-      data = Tickets.new("test-session", "Test task", tickets)
+      data = Tickets.new("test-project", "Test task", tickets)
 
       assert data.version == "1.0"
-      assert data.session_id == "test-session"
+      assert data.project_id == "test-project"
       assert data.task_description == "Test task"
       assert data.summary.total == 2
       assert data.summary.pending == 2
@@ -39,34 +39,34 @@ defmodule Albedo.TicketsTest do
 
     test "accepts project_name option" do
       tickets = [Ticket.new(%{id: "1", title: "Ticket 1"})]
-      data = Tickets.new("test-session", "Test task", tickets, project_name: "my_app")
+      data = Tickets.new("test-project", "Test task", tickets, project_name: "my_app")
 
       assert data.project_name == "my_app"
     end
   end
 
   describe "save/2 and load/1" do
-    test "saves and loads tickets data", %{session_dir: session_dir} do
+    test "saves and loads tickets data", %{project_dir: project_dir} do
       tickets = [
         Ticket.new(%{id: "1", title: "Ticket 1", estimate: 3}),
         Ticket.new(%{id: "2", title: "Ticket 2", estimate: 5})
       ]
 
-      data = Tickets.new("test-session", "Test task", tickets)
+      data = Tickets.new("test-project", "Test task", tickets)
 
-      assert :ok = Tickets.save(session_dir, data)
-      assert File.exists?(Path.join(session_dir, "tickets.json"))
+      assert :ok = Tickets.save(project_dir, data)
+      assert File.exists?(Path.join(project_dir, "tickets.json"))
 
-      {:ok, loaded} = Tickets.load(session_dir)
+      {:ok, loaded} = Tickets.load(project_dir)
 
-      assert loaded.session_id == "test-session"
+      assert loaded.project_id == "test-project"
       assert loaded.task_description == "Test task"
       assert length(loaded.tickets) == 2
       assert loaded.summary.total == 2
     end
 
-    test "load returns error for missing file", %{session_dir: session_dir} do
-      assert {:error, :not_found} = Tickets.load(session_dir)
+    test "load returns error for missing file", %{project_dir: project_dir} do
+      assert {:error, :not_found} = Tickets.load(project_dir)
     end
   end
 
@@ -185,7 +185,7 @@ defmodule Albedo.TicketsTest do
 
     setup do
       existing_ticket = Ticket.new(%{id: "1", title: "Existing ticket", estimate: 3})
-      data = Tickets.new("test-session", "Test task", [existing_ticket])
+      data = Tickets.new("test-project", "Test task", [existing_ticket])
       {:ok, data: data, existing_ticket: existing_ticket}
     end
 
@@ -264,7 +264,7 @@ defmodule Albedo.TicketsTest do
         Ticket.new(%{id: "3", title: "Third ticket", estimate: 8})
       ]
 
-      data = Tickets.new("test-session", "Test task", tickets)
+      data = Tickets.new("test-project", "Test task", tickets)
       {:ok, data: data}
     end
 
@@ -323,7 +323,7 @@ defmodule Albedo.TicketsTest do
         Ticket.new(%{id: "2", title: "Second ticket", estimate: 5})
       ]
 
-      data = Tickets.new("test-session", "Test task", tickets)
+      data = Tickets.new("test-project", "Test task", tickets)
       {:ok, data: data}
     end
 

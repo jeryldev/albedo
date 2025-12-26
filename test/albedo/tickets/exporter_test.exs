@@ -5,7 +5,7 @@ defmodule Albedo.Tickets.ExporterTest do
   alias Albedo.Tickets.Exporter
   alias Albedo.Tickets.Ticket
 
-  @test_data Tickets.new("test-session", "Build user authentication", [
+  @test_data Tickets.new("test-project", "Build user authentication", [
                Ticket.new(%{
                  id: "1",
                  title: "Create User schema",
@@ -66,7 +66,7 @@ defmodule Albedo.Tickets.ExporterTest do
       {:ok, content} = Exporter.export(@test_data, :json)
       assert {:ok, parsed} = Jason.decode(content)
 
-      assert parsed["session_id"] == "test-session"
+      assert parsed["project_id"] == "test-project"
       assert parsed["task_description"] == "Build user authentication"
       assert length(parsed["tickets"]) == 3
     end
@@ -140,7 +140,7 @@ defmodule Albedo.Tickets.ExporterTest do
       {:ok, content} = Exporter.export(@test_data, :markdown)
 
       assert content =~ "# Build user authentication"
-      assert content =~ "**Session:** test-session"
+      assert content =~ "**Project:** test-project"
       assert content =~ "## Summary"
       assert content =~ "## Tickets"
     end
@@ -188,7 +188,7 @@ defmodule Albedo.Tickets.ExporterTest do
       {:ok, parsed} = Jason.decode(content)
 
       assert parsed["source"] == "albedo"
-      assert parsed["session_id"] == "test-session"
+      assert parsed["project_id"] == "test-project"
       assert length(parsed["issues"]) == 3
     end
 
@@ -242,10 +242,10 @@ defmodule Albedo.Tickets.ExporterTest do
 
   describe "default_filename/2" do
     test "generates filename with correct extension" do
-      assert Exporter.default_filename("my-session", :json) == "my-session_tickets.json"
-      assert Exporter.default_filename("my-session", :csv) == "my-session_tickets.csv"
-      assert Exporter.default_filename("my-session", :markdown) == "my-session_tickets.md"
-      assert Exporter.default_filename("my-session", :github) == "my-session_tickets.github.json"
+      assert Exporter.default_filename("my-project", :json) == "my-project_tickets.json"
+      assert Exporter.default_filename("my-project", :csv) == "my-project_tickets.csv"
+      assert Exporter.default_filename("my-project", :markdown) == "my-project_tickets.md"
+      assert Exporter.default_filename("my-project", :github) == "my-project_tickets.github.json"
     end
   end
 

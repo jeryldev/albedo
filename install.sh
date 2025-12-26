@@ -516,7 +516,7 @@ create_config() {
   print_info "Creating configuration..."
 
   # Create directories
-  mkdir -p "$HOME/.albedo/sessions"
+  mkdir -p "$HOME/.albedo/projects"
 
   # Create config.toml with selected provider
   local config_file="$HOME/.albedo/config.toml"
@@ -530,7 +530,7 @@ provider = "$PROVIDER"  # gemini | claude | openai
 temperature = 0.3  # Lower = more deterministic
 
 [output]
-session_dir = "~/.albedo/sessions"
+projects_dir = "~/.albedo/projects"
 
 [search]
 tool = "ripgrep"
@@ -651,7 +651,7 @@ print_completion() {
   echo "Configuration:"
   echo -e "  Provider:    ${CYAN}$PROVIDER${NC}"
   echo -e "  Config:      ${CYAN}~/.albedo/config.toml${NC}"
-  echo -e "  Sessions:    ${CYAN}~/.albedo/sessions/${NC}"
+  echo -e "  Projects:    ${CYAN}~/.albedo/projects/${NC}"
   echo ""
   echo "Quick start:"
   echo -e "  ${CYAN}albedo --help${NC}                          # Show help"

@@ -102,30 +102,30 @@ defmodule Albedo.CLITest do
     end
   end
 
-  describe "sessions command" do
-    test "lists sessions or shows empty message" do
-      output = run_cli_safely(["sessions"])
+  describe "projects command" do
+    test "lists projects or shows empty message" do
+      output = run_cli_safely(["projects"])
       assert output =~ "Albedo"
     end
   end
 
   describe "show command" do
-    test "handles missing session" do
-      output = run_cli_safely_stderr(["show", "nonexistent-session"])
+    test "handles missing project" do
+      output = run_cli_safely_stderr(["show", "nonexistent-project"])
       assert output =~ "not found"
     end
   end
 
   describe "resume command" do
-    test "handles missing session path" do
-      output = run_cli_safely_stderr(["resume", "/nonexistent/session"])
+    test "handles missing project path" do
+      output = run_cli_safely_stderr(["resume", "/nonexistent/project"])
       assert output =~ "not found"
     end
   end
 
   describe "replan command" do
-    test "handles missing session path" do
-      output = run_cli_safely_stderr(["replan", "/nonexistent/session"])
+    test "handles missing project path" do
+      output = run_cli_safely_stderr(["replan", "/nonexistent/project"])
       assert output =~ "not found"
     end
   end

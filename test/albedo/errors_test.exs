@@ -17,10 +17,10 @@ defmodule Albedo.ErrorsTest do
     end
   end
 
-  describe "SessionError" do
-    test "creates exception with session_id and reason" do
-      error = %Errors.SessionError{session_id: "test-123", reason: :timeout}
-      assert Exception.message(error) == "Session test-123 error: :timeout"
+  describe "ProjectError" do
+    test "creates exception with project_id and reason" do
+      error = %Errors.ProjectError{project_id: "test-123", reason: :timeout}
+      assert Exception.message(error) == "Project test-123 error: :timeout"
     end
   end
 

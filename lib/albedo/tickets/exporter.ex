@@ -53,9 +53,9 @@ defmodule Albedo.Tickets.Exporter do
     end
   end
 
-  def default_filename(session_id, format) do
+  def default_filename(project_id, format) do
     ext = file_extension(format)
-    "#{session_id}_tickets#{ext}"
+    "#{project_id}_tickets#{ext}"
   end
 
   def filter_by_status(tickets, opts) do

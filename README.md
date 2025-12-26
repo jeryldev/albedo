@@ -155,8 +155,8 @@ Albedo will:
 Output example:
 ```
 Analysis complete!
-Session: 2025-01-15_sqlite-storage
-Output: ~/.albedo/sessions/2025-01-15_sqlite-storage/FEATURE.md
+Project: 2025-01-15_sqlite-storage
+Output: ~/.albedo/projects/2025-01-15_sqlite-storage/FEATURE.md
 
 Summary:
   - 5 tickets generated
@@ -173,13 +173,13 @@ Summary:
 | `albedo init` | Initialize configuration and check prerequisites |
 | `albedo analyze <path> --task "..."` | Analyze a codebase with a feature request |
 | `albedo plan --name <name> --task "..."` | Plan a new project from scratch (greenfield) |
-| `albedo resume <session_path>` | Resume an incomplete analysis session |
-| `albedo sessions` | List recent analysis sessions |
-| `albedo show <session_id>` | Display a session's FEATURE.md output |
-| `albedo replan <session_path>` | Re-run the planning phase |
-| `albedo path <session_id>` | Print session path (for use with cd) |
+| `albedo resume <project_path>` | Resume an incomplete analysis project |
+| `albedo projects` | List recent analysis projects |
+| `albedo show <project_id>` | Display a project's FEATURE.md output |
+| `albedo replan <project_path>` | Re-run the planning phase |
+| `albedo path <project_id>` | Print project path (for use with cd) |
 | `albedo config [subcommand]` | Manage configuration (show, set-provider, set-key) |
-| `albedo tickets` | List tickets from the latest session |
+| `albedo tickets` | List tickets from the latest project |
 | `albedo tickets show <id>` | Show detailed ticket information |
 | `albedo tickets add "title"` | Add a new ticket |
 | `albedo tickets start <id>` | Mark a ticket as in-progress |
@@ -195,7 +195,7 @@ Summary:
 |--------|-------|-------------|
 | `--task <desc>` | `-t` | Task/feature description (required for analyze/plan) |
 | `--name <name>` | `-n` | Project name (required for plan command) |
-| `--session <name>` | `-S` | Custom session name (optional, for easier reference) |
+| `--project <name>` | `-P` | Custom project name (optional, for easier reference) |
 | `--stack <stack>` | | Tech stack hint: `phoenix`, `rails`, `nextjs`, `fastapi`, etc. |
 | `--database <db>` | | Database hint: `postgres`, `mysql`, `sqlite`, `mongodb` |
 | `--interactive` | `-i` | Enable interactive clarifying questions |
@@ -221,11 +221,11 @@ albedo config set-key
 After analysis, manage your implementation tickets:
 
 ```bash
-# List all tickets from the latest session
+# List all tickets from the latest project
 albedo tickets
 
-# List tickets from a specific session
-albedo tickets --session my-feature
+# List tickets from a specific project
+albedo tickets --project my-feature
 
 # Filter by status
 albedo tickets --status pending
@@ -271,17 +271,17 @@ Albedo can also plan brand new projects that don't exist yet. Use the `plan` com
 
 **Note:** You don't need to create a project folder first. Albedo produces a planning document with tickets - it doesn't create the actual project files. After planning, you create the project and implement based on the generated tickets.
 
-**Where are session files stored?**
+**Where are project files stored?**
 
-All sessions (both `analyze` and `plan`) are stored in `~/.albedo/sessions/`:
+All projects (both `analyze` and `plan`) are stored in `~/.albedo/projects/`:
 
 ```
 ~/.albedo/
 ├── config.toml                     # Your configuration
-└── sessions/
-    ├── auth-feature/               # Custom session name (--session auth-feature)
+└── projects/
+    ├── auth-feature/               # Custom project name (--project auth-feature)
     └── 2025-01-15_my-todo-app_0042/  # Auto-generated (date + task slug + id)
-        ├── session.json            # Session state and metadata
+        ├── project.json            # Project state and metadata
         ├── 00_domain_research.md   # Domain analysis
         ├── 01_tech_stack.md        # Tech stack recommendations
         ├── 02_architecture.md      # Architecture design
@@ -291,11 +291,11 @@ All sessions (both `analyze` and `plan`) are stored in `~/.albedo/sessions/`:
         └── FEATURE.md              # Final tickets and implementation plan
 ```
 
-**Tip:** Use `--session` or `-S` to give your session a memorable name:
+**Tip:** Use `--project` or `-P` to give your project a memorable name:
 ```bash
-albedo analyze ~/myapp --task "Add auth" --session auth-feature
+albedo analyze ~/myapp --task "Add auth" --project auth-feature
 albedo show auth-feature       # View the output
-cd $(albedo path auth-feature) # Jump to session folder
+cd $(albedo path auth-feature) # Jump to project folder
 ```
 
 For greenfield projects, phases 03-05 are skipped since there's no codebase to analyze. The tool generates domain research, tech stack recommendations, architecture design, and implementation tickets.
@@ -341,8 +341,8 @@ Planning greenfield project: shop_api
   │  └─ ✓ Saved FEATURE.md
 
 Planning complete!
-Session: 2025-01-15_e-commerce-api
-Output: ~/.albedo/sessions/2025-01-15_e-commerce-api/FEATURE.md
+Project: 2025-01-15_e-commerce-api
+Output: ~/.albedo/projects/2025-01-15_e-commerce-api/FEATURE.md
 
 Summary:
   • 12 tickets generated
