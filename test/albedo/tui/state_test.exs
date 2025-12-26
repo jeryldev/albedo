@@ -12,7 +12,7 @@ defmodule Albedo.TUI.StateTest do
       assert state.data == nil
       assert state.projects == []
       assert state.current_project == 0
-      assert state.selected_ticket == 0
+      assert state.selected_ticket == nil
       assert state.active_panel == :projects
       assert state.mode == :normal
       assert state.quit == false
@@ -56,7 +56,7 @@ defmodule Albedo.TUI.StateTest do
 
       result = State.move_up(state)
 
-      assert result.selected_ticket == 0
+      assert result.selected_ticket == nil
     end
   end
 
@@ -111,24 +111,30 @@ defmodule Albedo.TUI.StateTest do
   end
 
   describe "next_panel/1" do
-    test "cycles projects -> tickets -> detail -> projects" do
+    test "cycles projects -> tickets -> research -> detail -> projects" do
       state = State.new()
 
       assert state.active_panel == :projects
       assert State.next_panel(state).active_panel == :tickets
-      assert State.next_panel(State.next_panel(state)).active_panel == :detail
-      assert State.next_panel(State.next_panel(State.next_panel(state))).active_panel == :projects
+      assert State.next_panel(State.next_panel(state)).active_panel == :research
+      assert State.next_panel(State.next_panel(State.next_panel(state))).active_panel == :detail
+
+      assert State.next_panel(State.next_panel(State.next_panel(State.next_panel(state)))).active_panel ==
+               :projects
     end
   end
 
   describe "prev_panel/1" do
-    test "cycles projects -> detail -> tickets -> projects" do
+    test "cycles projects -> detail -> research -> tickets -> projects" do
       state = State.new()
 
       assert state.active_panel == :projects
       assert State.prev_panel(state).active_panel == :detail
-      assert State.prev_panel(State.prev_panel(state)).active_panel == :tickets
-      assert State.prev_panel(State.prev_panel(State.prev_panel(state))).active_panel == :projects
+      assert State.prev_panel(State.prev_panel(state)).active_panel == :research
+      assert State.prev_panel(State.prev_panel(State.prev_panel(state))).active_panel == :tickets
+
+      assert State.prev_panel(State.prev_panel(State.prev_panel(State.prev_panel(state)))).active_panel ==
+               :projects
     end
   end
 
@@ -721,7 +727,7 @@ defmodule Albedo.TUI.StateTest do
       {:ok, result} = State.load_tickets(state, project_dir)
 
       assert result.project_dir == project_dir
-      assert result.selected_ticket == 0
+      assert result.selected_ticket == nil
       assert length(result.data.tickets) == 1
     end
 

@@ -99,20 +99,20 @@ defmodule Albedo.Project.Worker do
 
   @impl true
   def handle_info(:start_analysis, state) do
-    print_phase_header("Starting analysis")
+    print_phase_header(state, "Starting analysis")
     state = start_next_phase(state)
     {:noreply, state}
   end
 
   def handle_info(:start_greenfield_planning, state) do
     project_name = state.context[:project_name] || "new project"
-    print_phase_header("Planning greenfield project: #{project_name}")
+    print_phase_header(state, "Planning greenfield project: #{project_name}")
     state = start_next_phase(state)
     {:noreply, state}
   end
 
   def handle_info(:resume_analysis, state) do
-    print_phase_header("Resuming analysis")
+    print_phase_header(state, "Resuming analysis")
     state = start_next_phase(state)
     {:noreply, state}
   end
@@ -123,7 +123,7 @@ defmodule Albedo.Project.Worker do
   end
 
   def handle_info({:agent_complete, phase, findings}, state) do
-    print_phase_complete(phase)
+    print_phase_complete(state, phase)
     state = State.complete_phase(state, phase, findings)
     State.save(state)
 
@@ -140,7 +140,7 @@ defmodule Albedo.Project.Worker do
     Logger.error("Agent failed for phase #{phase}: #{inspect(reason)}")
     state = State.fail_phase(state, phase, reason)
     State.save(state)
-    print_phase_failed(phase, reason)
+    print_phase_failed(state, phase, reason)
     {:stop, :normal, state}
   end
 
@@ -157,7 +157,7 @@ defmodule Albedo.Project.Worker do
   end
 
   defp start_phase(state, phase) do
-    print_phase_start(phase)
+    print_phase_start(state, phase)
     state = State.start_phase(state, phase)
     State.save(state)
 
@@ -211,7 +211,7 @@ defmodule Albedo.Project.Worker do
         do: "Planning complete",
         else: "Analysis complete"
 
-    print_phase_header(header)
+    print_phase_header(state, header)
 
     summary =
       build_summary(state)
@@ -237,7 +237,10 @@ defmodule Albedo.Project.Worker do
 
       tickets_data = Tickets.new(state.id, state.task, tickets, project_name: project_name)
       Tickets.save(state.project_dir, tickets_data)
-      Owl.IO.puts(Owl.Data.tag("  │  └─ ✓ Saved tickets.json", :green))
+
+      unless silent?(state) do
+        Owl.IO.puts(Owl.Data.tag("  │  └─ ✓ Saved tickets.json", :green))
+      end
     end
   end
 
@@ -293,27 +296,55 @@ defmodule Albedo.Project.Worker do
     end
   end
 
-  defp print_phase_header(message) do
-    Owl.IO.puts(Owl.Data.tag("\n#{message}", :cyan))
-    IO.puts(String.duplicate("─", 50))
+  defp print_phase_header(state, message) do
+    send_progress(state, message)
+
+    unless silent?(state) do
+      Owl.IO.puts(Owl.Data.tag("\n#{message}", :cyan))
+      IO.puts(String.duplicate("─", 50))
+    end
   end
 
-  defp print_phase_start(phase) do
+  defp print_phase_start(state, phase) do
     phase_name = phase |> to_string() |> String.replace("_", " ") |> String.capitalize()
-    Owl.IO.puts(Owl.Data.tag("  ├─ #{phase_name}...", :light_black))
+    send_progress(state, "#{phase_name}...")
+
+    unless silent?(state) do
+      Owl.IO.puts(Owl.Data.tag("  ├─ #{phase_name}...", :light_black))
+    end
   end
 
-  defp print_phase_complete(phase) do
+  defp print_phase_complete(state, phase) do
     output_file = State.phase_output_file(phase)
-    Owl.IO.puts(Owl.Data.tag("  │  └─ ✓ Saved #{output_file}", :green))
+    send_progress(state, "✓ Saved #{output_file}")
+
+    unless silent?(state) do
+      Owl.IO.puts(Owl.Data.tag("  │  └─ ✓ Saved #{output_file}", :green))
+    end
   end
 
-  defp print_phase_failed(phase, reason) do
+  defp print_phase_failed(state, phase, reason) do
     phase_name = phase |> to_string() |> String.replace("_", " ") |> String.capitalize()
-    Owl.IO.puts(Owl.Data.tag("  │  └─ ✗ #{phase_name} failed: #{inspect(reason)}", :red))
+    send_progress(state, "✗ #{phase_name} failed: #{inspect(reason)}")
 
-    Owl.IO.puts(
-      Owl.Data.tag("\nProject failed. You can retry with: albedo resume <project_path>", :yellow)
-    )
+    unless silent?(state) do
+      Owl.IO.puts(Owl.Data.tag("  │  └─ ✗ #{phase_name} failed: #{inspect(reason)}", :red))
+
+      Owl.IO.puts(
+        Owl.Data.tag(
+          "\nProject failed. You can retry with: albedo resume <project_path>",
+          :yellow
+        )
+      )
+    end
   end
+
+  defp send_progress(state, message) do
+    case state.config[:progress_pid] do
+      pid when is_pid(pid) -> send(pid, {:operation_progress, message})
+      _ -> :ok
+    end
+  end
+
+  defp silent?(state), do: state.config[:silent] == true
 end

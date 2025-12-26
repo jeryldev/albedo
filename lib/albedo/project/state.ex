@@ -128,7 +128,8 @@ defmodule Albedo.Project.State do
   """
   def new_greenfield(project_name, task, opts \\ []) do
     now = DateTime.utc_now()
-    id = Id.generate_project_id(task, opts[:project])
+    custom_name = opts[:project] || project_name
+    id = Id.generate_project_id(task, custom_name)
     config = Albedo.Config.load!()
     project_dir = Path.join(Albedo.Config.projects_dir(config), id)
 
@@ -344,7 +345,9 @@ defmodule Albedo.Project.State do
 
   defp build_project_config(opts) do
     %{
-      interactive: opts[:interactive] || false
+      interactive: opts[:interactive] || false,
+      silent: opts[:silent] || false,
+      progress_pid: opts[:progress_pid]
     }
   end
 
@@ -354,7 +357,9 @@ defmodule Albedo.Project.State do
       project_name: project_name,
       stack: opts[:stack],
       database: opts[:database],
-      interactive: opts[:interactive] || false
+      interactive: opts[:interactive] || false,
+      silent: opts[:silent] || false,
+      progress_pid: opts[:progress_pid]
     }
   end
 
@@ -390,11 +395,15 @@ defmodule Albedo.Project.State do
       "state" => to_string(state.state),
       "created_at" => DateTime.to_iso8601(state.created_at),
       "updated_at" => DateTime.to_iso8601(state.updated_at),
-      "config" => state.config,
+      "config" => config_to_json(state.config),
       "phases" => phases_to_json(state.phases),
       "clarifying_questions" => state.clarifying_questions,
       "summary" => state.summary
     }
+  end
+
+  defp config_to_json(config) do
+    Map.drop(config, [:progress_pid])
   end
 
   defp phases_to_json(phases) do

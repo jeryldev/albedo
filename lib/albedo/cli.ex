@@ -26,6 +26,14 @@ defmodule Albedo.CLI do
     end
   end
 
+  defp safe_gets(prompt) do
+    case IO.gets(prompt) do
+      :eof -> ""
+      {:error, _} -> ""
+      result when is_binary(result) -> String.trim(result)
+    end
+  end
+
   defp parse_args(args) do
     {opts, args, invalid} =
       OptionParser.parse(args,
@@ -540,7 +548,7 @@ defmodule Albedo.CLI do
     IO.puts("About to delete project: #{project_id}")
     IO.puts("This will remove all project files permanently.")
     IO.puts("")
-    response = IO.gets("Are you sure? [y/N] ") |> String.trim() |> String.downcase()
+    response = safe_gets("Are you sure? [y/N] ") |> String.downcase()
     response in ["y", "yes"]
   end
 
@@ -709,7 +717,7 @@ defmodule Albedo.CLI do
     IO.puts("  3. OpenAI")
     IO.puts("")
 
-    choice = IO.gets("Enter choice [1]: ") |> String.trim()
+    choice = safe_gets("Enter choice [1]: ")
 
     provider =
       case choice do
@@ -725,7 +733,7 @@ defmodule Albedo.CLI do
     Owl.IO.puts(Owl.Data.tag("  provider = \"#{provider}\"", :cyan))
     IO.puts("")
 
-    confirm = IO.gets("Proceed? [Y/n]: ") |> String.trim() |> String.downcase()
+    confirm = safe_gets("Proceed? [Y/n]: ") |> String.downcase()
 
     if confirm in ["", "y", "yes"] do
       case Config.set_provider(provider) do
@@ -755,7 +763,7 @@ defmodule Albedo.CLI do
     IO.puts("Environment variable: #{env_var}")
     IO.puts("")
 
-    api_key = IO.gets("Enter your API key: ") |> String.trim()
+    api_key = safe_gets("Enter your API key: ")
 
     if api_key == "" do
       print_info("Cancelled.")
@@ -769,7 +777,7 @@ defmodule Albedo.CLI do
       Owl.IO.puts(Owl.Data.tag("  export #{env_var}=\"#{masked}\"", :cyan))
       IO.puts("")
 
-      confirm = IO.gets("Proceed? [Y/n]: ") |> String.trim() |> String.downcase()
+      confirm = safe_gets("Proceed? [Y/n]: ") |> String.downcase()
       handle_set_key_confirm(confirm, shell_profile, env_var, export_line)
     end
   end
@@ -1297,7 +1305,7 @@ defmodule Albedo.CLI do
     IO.puts("About to delete #{length(tickets)} ticket(s):")
     Enum.each(tickets, fn t -> IO.puts("  ##{t.id}: #{t.title}") end)
     IO.puts("")
-    response = IO.gets("Are you sure? [y/N] ") |> String.trim() |> String.downcase()
+    response = safe_gets("Are you sure? [y/N] ") |> String.downcase()
     response in ["y", "yes"]
   end
 

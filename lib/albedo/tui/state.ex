@@ -13,7 +13,10 @@ defmodule Albedo.TUI.State do
     :projects_dir,
     :current_project,
     :selected_ticket,
+    :selected_file,
+    :research_files,
     :active_panel,
+    :detail_content,
     :panel_scroll,
     :detail_scroll,
     :terminal_size,
@@ -29,22 +32,53 @@ defmodule Albedo.TUI.State do
     :input_buffer,
     :input_cursor,
     :confirm_action,
-    :confirm_message
+    :confirm_message,
+    :wizard_data,
+    :modal,
+    :modal_data,
+    :modal_scroll,
+    :modal_task_ref
   ]
 
-  @type panel :: :projects | :tickets | :detail
-  @type mode :: :normal | :command | :confirm | :edit | :input | :help
+  @type panel :: :projects | :tickets | :research | :detail
+  @type mode :: :normal | :command | :confirm | :edit | :input | :help | :modal
 
   @editable_fields [:title, :description, :type, :priority, :estimate, :labels]
+
+  @type research_file :: %{
+          name: String.t(),
+          path: String.t(),
+          type: :markdown | :json
+        }
+
+  @type modal_data :: %{
+          type: :plan | :analyze,
+          phase: :input | :running | :completed | :failed,
+          name: String.t(),
+          task: String.t(),
+          name_buffer: String.t(),
+          task_buffer: String.t(),
+          active_field: :name | :task,
+          cursor: non_neg_integer(),
+          logs: [String.t()],
+          result: map() | nil
+        }
 
   @type t :: %__MODULE__{
           project_dir: String.t() | nil,
           data: Tickets.Data.t() | nil,
           projects: [map()],
           current_project: non_neg_integer(),
-          selected_ticket: non_neg_integer(),
+          selected_ticket: non_neg_integer() | nil,
+          selected_file: non_neg_integer(),
+          research_files: [research_file()],
           active_panel: panel(),
-          panel_scroll: %{projects: non_neg_integer(), tickets: non_neg_integer()},
+          detail_content: :ticket | :research,
+          panel_scroll: %{
+            projects: non_neg_integer(),
+            tickets: non_neg_integer(),
+            research: non_neg_integer()
+          },
           terminal_size: {non_neg_integer(), non_neg_integer()},
           mode: mode(),
           message: String.t() | nil,
@@ -58,7 +92,12 @@ defmodule Albedo.TUI.State do
           input_buffer: String.t() | nil,
           input_cursor: non_neg_integer(),
           confirm_action: atom() | nil,
-          confirm_message: String.t() | nil
+          confirm_message: String.t() | nil,
+          wizard_data: map() | nil,
+          modal: :plan | :analyze | nil,
+          modal_data: modal_data() | nil,
+          modal_scroll: non_neg_integer(),
+          modal_task_ref: reference() | nil
         }
 
   def new(opts \\ []) do
@@ -68,9 +107,12 @@ defmodule Albedo.TUI.State do
       projects: [],
       projects_dir: nil,
       current_project: 0,
-      selected_ticket: 0,
+      selected_ticket: nil,
+      selected_file: 0,
+      research_files: [],
       active_panel: :projects,
-      panel_scroll: %{projects: 0, tickets: 0},
+      detail_content: :ticket,
+      panel_scroll: %{projects: 0, tickets: 0, research: 0},
       detail_scroll: 0,
       terminal_size: {80, 24},
       mode: :normal,
@@ -85,7 +127,12 @@ defmodule Albedo.TUI.State do
       input_buffer: nil,
       input_cursor: 0,
       confirm_action: nil,
-      confirm_message: nil
+      confirm_message: nil,
+      wizard_data: nil,
+      modal: nil,
+      modal_data: nil,
+      modal_scroll: 0,
+      modal_task_ref: nil
     }
   end
 
@@ -137,10 +184,53 @@ defmodule Albedo.TUI.State do
   def load_tickets(%__MODULE__{} = state, project_dir) do
     case Tickets.load(project_dir) do
       {:ok, data} ->
-        {:ok, %{state | data: data, project_dir: project_dir, selected_ticket: 0}}
+        files = load_research_files(project_dir)
+
+        {:ok,
+         %{
+           state
+           | data: data,
+             project_dir: project_dir,
+             selected_ticket: nil,
+             selected_file: 0,
+             research_files: files,
+             detail_scroll: 0
+         }}
 
       {:error, reason} ->
         {:error, reason}
+    end
+  end
+
+  defp load_research_files(project_dir) do
+    case File.ls(project_dir) do
+      {:ok, files} ->
+        files
+        |> Enum.filter(&research_file?/1)
+        |> Enum.sort()
+        |> Enum.map(fn file ->
+          %{
+            name: file,
+            path: Path.join(project_dir, file),
+            type: file_type(file)
+          }
+        end)
+
+      {:error, _} ->
+        []
+    end
+  end
+
+  defp research_file?(name) do
+    ext = Path.extname(name)
+    ext in [".md", ".json"]
+  end
+
+  defp file_type(name) do
+    case Path.extname(name) do
+      ".md" -> :markdown
+      ".json" -> :json
+      _ -> :unknown
     end
   end
 
@@ -149,15 +239,27 @@ defmodule Albedo.TUI.State do
   end
 
   def current_ticket(%__MODULE__{data: nil}), do: nil
+  def current_ticket(%__MODULE__{selected_ticket: nil}), do: nil
 
   def current_ticket(%__MODULE__{data: data, selected_ticket: idx}) do
     Enum.at(data.tickets, idx)
+  end
+
+  def current_research_file(%__MODULE__{research_files: []}), do: nil
+
+  def current_research_file(%__MODULE__{research_files: files, selected_file: idx}) do
+    Enum.at(files, idx)
   end
 
   def visible_tickets(%__MODULE__{data: nil}), do: []
 
   def visible_tickets(%__MODULE__{data: data}) do
     data.tickets
+    |> Enum.with_index()
+  end
+
+  def visible_research_files(%__MODULE__{research_files: files}) do
+    files
     |> Enum.with_index()
   end
 
@@ -168,9 +270,20 @@ defmodule Albedo.TUI.State do
 
   def move_up(%__MODULE__{active_panel: :tickets, data: nil} = state), do: state
 
+  def move_up(%__MODULE__{active_panel: :tickets, selected_ticket: nil, data: data} = state) do
+    if data.tickets != [], do: %{state | selected_ticket: 0}, else: state
+  end
+
   def move_up(%__MODULE__{active_panel: :tickets} = state) do
     new_idx = max(0, state.selected_ticket - 1)
     %{state | selected_ticket: new_idx}
+  end
+
+  def move_up(%__MODULE__{active_panel: :research, research_files: []} = state), do: state
+
+  def move_up(%__MODULE__{active_panel: :research} = state) do
+    new_idx = max(0, state.selected_file - 1)
+    %{state | selected_file: new_idx, detail_scroll: 0}
   end
 
   def move_up(%__MODULE__{active_panel: :detail} = state) do
@@ -186,10 +299,22 @@ defmodule Albedo.TUI.State do
 
   def move_down(%__MODULE__{active_panel: :tickets, data: nil} = state), do: state
 
+  def move_down(%__MODULE__{active_panel: :tickets, selected_ticket: nil, data: data} = state) do
+    if data.tickets != [], do: %{state | selected_ticket: 0}, else: state
+  end
+
   def move_down(%__MODULE__{active_panel: :tickets, data: data} = state) do
     max_idx = max(0, length(data.tickets) - 1)
     new_idx = min(max_idx, state.selected_ticket + 1)
     %{state | selected_ticket: new_idx}
+  end
+
+  def move_down(%__MODULE__{active_panel: :research, research_files: []} = state), do: state
+
+  def move_down(%__MODULE__{active_panel: :research, research_files: files} = state) do
+    max_idx = max(0, length(files) - 1)
+    new_idx = min(max_idx, state.selected_file + 1)
+    %{state | selected_file: new_idx, detail_scroll: 0}
   end
 
   def move_down(%__MODULE__{active_panel: :detail} = state) do
@@ -201,6 +326,10 @@ defmodule Albedo.TUI.State do
   end
 
   def next_panel(%__MODULE__{active_panel: :tickets} = state) do
+    %{state | active_panel: :research}
+  end
+
+  def next_panel(%__MODULE__{active_panel: :research} = state) do
     %{state | active_panel: :detail}
   end
 
@@ -216,8 +345,12 @@ defmodule Albedo.TUI.State do
     %{state | active_panel: :projects}
   end
 
-  def prev_panel(%__MODULE__{active_panel: :detail} = state) do
+  def prev_panel(%__MODULE__{active_panel: :research} = state) do
     %{state | active_panel: :tickets}
+  end
+
+  def prev_panel(%__MODULE__{active_panel: :detail} = state) do
+    %{state | active_panel: :research}
   end
 
   def scroll_detail_up(%__MODULE__{} = state) do
@@ -408,7 +541,8 @@ defmodule Albedo.TUI.State do
         input_mode: nil,
         input_prompt: nil,
         input_buffer: nil,
-        input_cursor: 0
+        input_cursor: 0,
+        wizard_data: nil
     }
   end
 
@@ -476,5 +610,153 @@ defmodule Albedo.TUI.State do
 
   def exit_help_mode(%__MODULE__{} = state) do
     %{state | mode: :normal}
+  end
+
+  def enter_modal(%__MODULE__{} = state, type) do
+    modal_data = %{
+      type: type,
+      phase: :input,
+      name: "",
+      task: "",
+      name_buffer: "",
+      task_buffer: "",
+      active_field: :name,
+      cursor: 0,
+      logs: [],
+      result: nil
+    }
+
+    %{
+      state
+      | mode: :modal,
+        modal: type,
+        modal_data: modal_data,
+        modal_scroll: 0,
+        modal_task_ref: nil
+    }
+  end
+
+  def enter_modal_with_path(%__MODULE__{} = state, type, path) do
+    modal_data = %{
+      type: type,
+      phase: :input,
+      name: path,
+      task: "",
+      name_buffer: path,
+      task_buffer: "",
+      active_field: :task,
+      cursor: 0,
+      logs: [],
+      result: nil
+    }
+
+    %{
+      state
+      | mode: :modal,
+        modal: type,
+        modal_data: modal_data,
+        modal_scroll: 0,
+        modal_task_ref: nil
+    }
+  end
+
+  def start_modal_operation(%__MODULE__{modal_data: data} = state) do
+    updated_data = %{
+      data
+      | phase: :running,
+        name: data.name_buffer,
+        task: data.task_buffer,
+        logs: ["Starting #{data.type}..."]
+    }
+
+    %{state | modal_data: updated_data}
+  end
+
+  def add_modal_log(%__MODULE__{modal_data: nil} = state, _log), do: state
+
+  def add_modal_log(%__MODULE__{modal_data: data} = state, log) do
+    updated_data = %{data | logs: data.logs ++ [log]}
+    %{state | modal_data: updated_data}
+  end
+
+  def complete_modal(%__MODULE__{modal_data: nil} = state, _status, _result), do: state
+
+  def complete_modal(%__MODULE__{modal_data: data} = state, status, result) do
+    updated_data = %{data | phase: status, result: result}
+    %{state | modal_data: updated_data}
+  end
+
+  def modal_insert_char(%__MODULE__{modal_data: data} = state, char) do
+    {buffer_key, buffer} = get_active_modal_buffer(data)
+    cursor = data.cursor
+    {before, after_cursor} = String.split_at(buffer, cursor)
+    new_buffer = before <> char <> after_cursor
+    updated_data = Map.put(data, buffer_key, new_buffer) |> Map.put(:cursor, cursor + 1)
+    %{state | modal_data: updated_data}
+  end
+
+  def modal_delete_char(%__MODULE__{modal_data: %{cursor: 0}} = state), do: state
+
+  def modal_delete_char(%__MODULE__{modal_data: data} = state) do
+    {buffer_key, buffer} = get_active_modal_buffer(data)
+    cursor = data.cursor
+    {before, after_cursor} = String.split_at(buffer, cursor)
+    new_before = String.slice(before, 0, String.length(before) - 1)
+    new_buffer = new_before <> after_cursor
+    updated_data = Map.put(data, buffer_key, new_buffer) |> Map.put(:cursor, cursor - 1)
+    %{state | modal_data: updated_data}
+  end
+
+  def modal_move_cursor_left(%__MODULE__{modal_data: data} = state) do
+    updated_data = %{data | cursor: max(0, data.cursor - 1)}
+    %{state | modal_data: updated_data}
+  end
+
+  def modal_move_cursor_right(%__MODULE__{modal_data: data} = state) do
+    {_buffer_key, buffer} = get_active_modal_buffer(data)
+    updated_data = %{data | cursor: min(String.length(buffer), data.cursor + 1)}
+    %{state | modal_data: updated_data}
+  end
+
+  def modal_next_field(%__MODULE__{modal_data: %{active_field: :name} = data} = state) do
+    updated_data = %{data | active_field: :task, cursor: String.length(data.task_buffer)}
+    %{state | modal_data: updated_data}
+  end
+
+  def modal_next_field(%__MODULE__{modal_data: %{active_field: :task} = data} = state) do
+    updated_data = %{data | active_field: :name, cursor: String.length(data.name_buffer)}
+    %{state | modal_data: updated_data}
+  end
+
+  def modal_prev_field(%__MODULE__{modal_data: data} = state) do
+    modal_next_field(%{state | modal_data: data})
+  end
+
+  defp get_active_modal_buffer(%{active_field: :name, name_buffer: buffer}),
+    do: {:name_buffer, buffer}
+
+  defp get_active_modal_buffer(%{active_field: :task, task_buffer: buffer}),
+    do: {:task_buffer, buffer}
+
+  def exit_modal(%__MODULE__{} = state) do
+    %{
+      state
+      | mode: :normal,
+        modal: nil,
+        modal_data: nil,
+        modal_scroll: 0,
+        modal_task_ref: nil
+    }
+  end
+
+  def scroll_modal_up(%__MODULE__{modal_scroll: scroll} = state) do
+    %{state | modal_scroll: max(0, scroll - 1)}
+  end
+
+  def scroll_modal_down(%__MODULE__{modal_data: nil} = state), do: state
+
+  def scroll_modal_down(%__MODULE__{modal_scroll: scroll, modal_data: data} = state) do
+    max_scroll = max(0, length(data.logs) - 1)
+    %{state | modal_scroll: min(max_scroll, scroll + 1)}
   end
 end

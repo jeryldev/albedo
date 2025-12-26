@@ -102,6 +102,15 @@ defmodule Albedo.TUI.Terminal do
     end
   end
 
+  @doc """
+  Flushes any pending input by waiting for the buffer to settle.
+  Call this after a blocking operation to clear stale keypresses.
+  """
+  def flush_input do
+    Process.sleep(150)
+    :ok
+  end
+
   defp read_escape_sequence do
     case IO.getn("", 1) do
       "[" -> read_csi_sequence()

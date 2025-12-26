@@ -9,6 +9,8 @@ defmodule Albedo.TUI do
   alias Albedo.{Config, Project, Tickets}
   alias Albedo.TUI.{Renderer, State, Terminal}
 
+  require Logger
+
   @doc """
   Starts the TUI application.
   """
@@ -25,7 +27,8 @@ defmodule Albedo.TUI do
         try do
           Terminal.enter_alternate_screen()
           Terminal.hide_cursor()
-          run_loop(state, projects_dir)
+          input_pid = start_input_reader()
+          run_loop(state, projects_dir, input_pid)
         after
           cleanup(old_settings)
         end
@@ -41,22 +44,53 @@ defmodule Albedo.TUI do
     Terminal.restore_mode(old_settings)
   end
 
-  defp run_loop(%State{quit: true}, _projects_dir), do: :ok
+  defp run_loop(%State{quit: true}, _projects_dir, _input_pid), do: :ok
 
-  defp run_loop(%State{} = state, projects_dir) do
+  defp run_loop(%State{} = state, projects_dir, input_pid) do
     Renderer.render(state)
 
-    case Terminal.read_char() do
-      :ctrl_c ->
+    receive do
+      {:input, :ctrl_c} ->
+        send(input_pid, :stop)
         :ok
 
-      :ctrl_d ->
+      {:input, :ctrl_d} ->
+        send(input_pid, :stop)
         :ok
 
-      input ->
+      {:input, input} ->
         state
         |> handle_input(input, projects_dir)
-        |> run_loop(projects_dir)
+        |> run_loop(projects_dir, input_pid)
+
+      {:operation_complete, result} ->
+        state
+        |> handle_operation_complete(result, projects_dir)
+        |> run_loop(projects_dir, input_pid)
+
+      {:operation_progress, message} ->
+        state
+        |> handle_operation_progress(message)
+        |> run_loop(projects_dir, input_pid)
+    end
+  end
+
+  defp start_input_reader do
+    parent = self()
+
+    spawn_link(fn ->
+      input_reader_loop(parent)
+    end)
+  end
+
+  defp input_reader_loop(parent) do
+    receive do
+      :stop -> :ok
+    after
+      0 ->
+        char = Terminal.read_char()
+        send(parent, {:input, char})
+        input_reader_loop(parent)
     end
   end
 
@@ -74,6 +108,10 @@ defmodule Albedo.TUI do
 
   defp handle_input(%State{mode: :help} = state, input, _projects_dir) do
     dispatch_help_mode(state, input)
+  end
+
+  defp handle_input(%State{mode: :modal} = state, input, projects_dir) do
+    dispatch_modal_mode(state, input, projects_dir)
   end
 
   defp handle_input(state, input, projects_dir) do
@@ -156,6 +194,10 @@ defmodule Albedo.TUI do
   defp handle_char(state, "x", _projects_dir), do: handle_delete(state)
   defp handle_char(state, "X", _projects_dir), do: handle_delete(state)
   defp handle_char(state, "?", _projects_dir), do: State.enter_help_mode(state)
+  defp handle_char(state, "1", _projects_dir), do: %{state | active_panel: :projects}
+  defp handle_char(state, "2", _projects_dir), do: %{state | active_panel: :tickets}
+  defp handle_char(state, "3", _projects_dir), do: %{state | active_panel: :research}
+  defp handle_char(state, "4", _projects_dir), do: %{state | active_panel: :detail}
   defp handle_char(state, _, _projects_dir), do: state
 
   defp dispatch_help_mode(state, :escape), do: State.exit_help_mode(state)
@@ -163,6 +205,131 @@ defmodule Albedo.TUI do
   defp dispatch_help_mode(state, {:char, "q"}), do: State.exit_help_mode(state)
   defp dispatch_help_mode(state, {:char, "?"}), do: State.exit_help_mode(state)
   defp dispatch_help_mode(state, _), do: state
+
+  defp dispatch_modal_mode(%State{modal_data: %{phase: :input}} = state, :escape, _projects_dir) do
+    State.exit_modal(state)
+    |> State.set_message("Cancelled")
+  end
+
+  defp dispatch_modal_mode(%State{modal_data: %{phase: :input}} = state, :enter, projects_dir) do
+    handle_modal_submit(state, projects_dir)
+  end
+
+  defp dispatch_modal_mode(%State{modal_data: %{phase: :input}} = state, :tab, _projects_dir) do
+    State.modal_next_field(state)
+  end
+
+  defp dispatch_modal_mode(
+         %State{modal_data: %{phase: :input}} = state,
+         :shift_tab,
+         _projects_dir
+       ) do
+    State.modal_prev_field(state)
+  end
+
+  defp dispatch_modal_mode(
+         %State{modal_data: %{phase: :input}} = state,
+         :backspace,
+         _projects_dir
+       ) do
+    State.modal_delete_char(state)
+  end
+
+  defp dispatch_modal_mode(%State{modal_data: %{phase: :input}} = state, :left, _projects_dir) do
+    State.modal_move_cursor_left(state)
+  end
+
+  defp dispatch_modal_mode(%State{modal_data: %{phase: :input}} = state, :right, _projects_dir) do
+    State.modal_move_cursor_right(state)
+  end
+
+  defp dispatch_modal_mode(
+         %State{modal_data: %{phase: :input}} = state,
+         {:char, char},
+         _projects_dir
+       ) do
+    State.modal_insert_char(state, char)
+  end
+
+  defp dispatch_modal_mode(%State{modal_data: %{phase: phase}} = state, :escape, projects_dir)
+       when phase in [:completed, :failed] do
+    close_modal_and_refresh(state, projects_dir)
+  end
+
+  defp dispatch_modal_mode(%State{modal_data: %{phase: phase}} = state, :enter, projects_dir)
+       when phase in [:completed, :failed] do
+    close_modal_and_refresh(state, projects_dir)
+  end
+
+  defp dispatch_modal_mode(
+         %State{modal_data: %{phase: phase}} = state,
+         {:char, "j"},
+         _projects_dir
+       )
+       when phase != :input do
+    State.scroll_modal_down(state)
+  end
+
+  defp dispatch_modal_mode(
+         %State{modal_data: %{phase: phase}} = state,
+         {:char, "k"},
+         _projects_dir
+       )
+       when phase != :input do
+    State.scroll_modal_up(state)
+  end
+
+  defp dispatch_modal_mode(%State{modal_data: %{phase: phase}} = state, :down, _projects_dir)
+       when phase != :input do
+    State.scroll_modal_down(state)
+  end
+
+  defp dispatch_modal_mode(%State{modal_data: %{phase: phase}} = state, :up, _projects_dir)
+       when phase != :input do
+    State.scroll_modal_up(state)
+  end
+
+  defp dispatch_modal_mode(state, _, _projects_dir), do: state
+
+  defp handle_modal_submit(
+         %State{modal_data: %{name_buffer: name, task_buffer: task}} = state,
+         _projects_dir
+       )
+       when name == "" or task == "" do
+    State.set_message(state, "Both name and task are required")
+  end
+
+  defp handle_modal_submit(%State{modal: :plan} = state, projects_dir) do
+    run_plan(state, projects_dir)
+  end
+
+  defp handle_modal_submit(
+         %State{modal: :analyze, modal_data: %{name_buffer: path}} = state,
+         projects_dir
+       ) do
+    if File.dir?(path) do
+      run_analyze(state, projects_dir)
+    else
+      State.set_message(state, "Directory not found: #{path}")
+    end
+  end
+
+  defp close_modal_and_refresh(state, projects_dir) do
+    result = state.modal_data.result
+
+    state
+    |> State.exit_modal()
+    |> State.load_projects(projects_dir)
+    |> Map.put(:current_project, 0)
+    |> maybe_load_created_project(result, projects_dir)
+  end
+
+  defp maybe_load_created_project(state, %{project_id: project_id}, projects_dir) do
+    project_path = Path.join(projects_dir, project_id)
+    load_created_project(state, project_path)
+  end
+
+  defp maybe_load_created_project(state, _, _projects_dir), do: state
 
   defp handle_enter(%State{active_panel: :projects} = state, projects_dir) do
     case State.current_project(state) do
@@ -184,6 +351,26 @@ defmodule Albedo.TUI do
           {:error, reason} ->
             State.set_message(state, "Error: #{inspect(reason)}")
         end
+    end
+  end
+
+  defp handle_enter(%State{active_panel: :tickets} = state, _projects_dir) do
+    case State.current_ticket(state) do
+      nil ->
+        State.set_message(state, "No ticket selected")
+
+      _ticket ->
+        %{state | active_panel: :detail, detail_content: :ticket} |> State.reset_detail_scroll()
+    end
+  end
+
+  defp handle_enter(%State{active_panel: :research} = state, _projects_dir) do
+    case State.current_research_file(state) do
+      nil ->
+        State.set_message(state, "No file selected")
+
+      _file ->
+        %{state | active_panel: :detail, detail_content: :research} |> State.reset_detail_scroll()
     end
   end
 
@@ -467,10 +654,7 @@ defmodule Albedo.TUI do
   defp handle_create(state), do: state
 
   defp handle_plan(%State{active_panel: :projects} = state) do
-    State.set_message(
-      state,
-      "Plan feature coming soon - use CLI: albedo plan --name <name> --task <task>"
-    )
+    State.enter_modal(state, :plan)
   end
 
   defp handle_plan(state) do
@@ -478,10 +662,7 @@ defmodule Albedo.TUI do
   end
 
   defp handle_analyze(%State{active_panel: :projects} = state) do
-    State.set_message(
-      state,
-      "Analyze feature coming soon - use CLI: albedo analyze <path> --task <task>"
-    )
+    State.enter_modal(state, :analyze)
   end
 
   defp handle_analyze(state) do
@@ -603,6 +784,116 @@ defmodule Albedo.TUI do
             |> State.exit_confirm_mode()
             |> State.set_message("Failed to delete: #{inspect(reason)}")
         end
+    end
+  end
+
+  defp run_plan(state, _projects_dir) do
+    name = state.modal_data.name_buffer
+    task = state.modal_data.task_buffer
+    parent = self()
+
+    modal_state =
+      state
+      |> State.start_modal_operation()
+      |> State.add_modal_log("Starting plan...")
+      |> State.add_modal_log("Project: #{name}")
+      |> State.add_modal_log("Task: #{task}")
+      |> State.add_modal_log("")
+
+    spawn_link(fn ->
+      Logger.configure(level: :none)
+
+      result =
+        Project.start_greenfield(name, task,
+          stream: false,
+          silent: true,
+          progress_pid: parent
+        )
+
+      send(parent, {:operation_complete, {:plan, result}})
+    end)
+
+    modal_state
+  end
+
+  defp run_analyze(state, _projects_dir) do
+    path = state.modal_data.name_buffer
+    task = state.modal_data.task_buffer
+    parent = self()
+
+    modal_state =
+      state
+      |> State.start_modal_operation()
+      |> State.add_modal_log("Starting analysis...")
+      |> State.add_modal_log("Codebase: #{path}")
+      |> State.add_modal_log("Task: #{task}")
+      |> State.add_modal_log("")
+
+    spawn_link(fn ->
+      Logger.configure(level: :none)
+
+      result =
+        Project.start(path, task,
+          stream: false,
+          silent: true,
+          progress_pid: parent
+        )
+
+      send(parent, {:operation_complete, {:analyze, result}})
+    end)
+
+    modal_state
+  end
+
+  defp handle_operation_complete(state, {:plan, result}, projects_dir) do
+    case result do
+      {:ok, project_id, _result} ->
+        state
+        |> State.add_modal_log("")
+        |> State.add_modal_log("Project created: #{project_id}")
+        |> State.add_modal_log("Press Enter or Esc to continue")
+        |> State.complete_modal(:completed, %{project_id: project_id})
+        |> State.load_projects(projects_dir)
+
+      {:error, reason} ->
+        state
+        |> State.add_modal_log("")
+        |> State.add_modal_log("Plan failed: #{inspect(reason)}")
+        |> State.add_modal_log("Press Enter or Esc to continue")
+        |> State.complete_modal(:failed, nil)
+    end
+  end
+
+  defp handle_operation_complete(state, {:analyze, result}, projects_dir) do
+    case result do
+      {:ok, project_id, _result} ->
+        state
+        |> State.add_modal_log("")
+        |> State.add_modal_log("Analysis complete: #{project_id}")
+        |> State.add_modal_log("Press Enter or Esc to continue")
+        |> State.complete_modal(:completed, %{project_id: project_id})
+        |> State.load_projects(projects_dir)
+
+      {:error, reason} ->
+        state
+        |> State.add_modal_log("")
+        |> State.add_modal_log("Analyze failed: #{inspect(reason)}")
+        |> State.add_modal_log("Press Enter or Esc to continue")
+        |> State.complete_modal(:failed, nil)
+    end
+  end
+
+  defp handle_operation_progress(state, message) do
+    State.add_modal_log(state, message)
+  end
+
+  defp load_created_project(state, output_dir) do
+    case State.load_tickets(state, output_dir) do
+      {:ok, new_state} ->
+        Map.put(new_state, :active_panel, :tickets)
+
+      {:error, _} ->
+        state
     end
   end
 end
