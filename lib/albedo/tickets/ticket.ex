@@ -294,13 +294,20 @@ defmodule Albedo.Tickets.Ticket do
   defp normalize_attrs(attrs) do
     Enum.reduce(attrs, %{}, fn
       {key, value}, acc when is_binary(key) ->
-        Map.put(acc, String.to_existing_atom(key), value)
+        case safe_to_existing_atom(key) do
+          {:ok, atom_key} -> Map.put(acc, atom_key, value)
+          :error -> Map.put(acc, key, value)
+        end
 
       {key, value}, acc when is_atom(key) ->
         Map.put(acc, key, value)
     end)
+  end
+
+  defp safe_to_existing_atom(string) do
+    {:ok, String.to_existing_atom(string)}
   rescue
-    ArgumentError -> attrs
+    ArgumentError -> :error
   end
 
   defp rename_points_to_estimate(attrs) do

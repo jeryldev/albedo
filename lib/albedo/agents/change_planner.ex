@@ -12,6 +12,19 @@ defmodule Albedo.Agents.ChangePlanner do
   alias Albedo.LLM.Prompts
   alias Albedo.Tickets.Parser
 
+  # Helper to access map keys consistently (handles both atom and string keys from JSON)
+  defp get_key(map, key) when is_map(map) and is_atom(key) do
+    Map.get(map, key) || Map.get(map, Atom.to_string(key))
+  end
+
+  defp get_key(map, key) when is_map(map) and is_binary(key) do
+    Map.get(map, key) || Map.get(map, String.to_existing_atom(key))
+  rescue
+    ArgumentError -> Map.get(map, key)
+  end
+
+  defp get_key(_, _), do: nil
+
   @impl Albedo.Agents.Base
   def investigate(state) do
     task = state.task
@@ -199,21 +212,22 @@ defmodule Albedo.Agents.ChangePlanner do
 
   defp format_overview_section(overview) when is_map(overview) do
     key_changes =
-      if overview["key_changes"] do
-        Enum.with_index(overview["key_changes"], 1)
-        |> Enum.map_join("\n", fn {change, idx} -> "#{idx}. #{change}" end)
-      else
-        ""
+      case get_key(overview, :key_changes) do
+        nil ->
+          ""
+
+        changes ->
+          Enum.with_index(changes, 1) |> Enum.map_join("\n", fn {c, i} -> "#{i}. #{c}" end)
       end
 
     """
     ## Technical Overview
 
     ### Current State
-    #{overview["current_state"] || "N/A"}
+    #{get_key(overview, :current_state) || "N/A"}
 
     ### Target State
-    #{overview["target_state"] || "N/A"}
+    #{get_key(overview, :target_state) || "N/A"}
 
     ### Key Changes
     #{key_changes}
@@ -293,7 +307,7 @@ defmodule Albedo.Agents.ChangePlanner do
   defp format_risks_section(_), do: ""
 
   defp format_risk_row(risk) do
-    "| #{risk["risk"] || ""} | #{risk["likelihood"] || ""} | #{risk["impact"] || ""} | #{risk["mitigation"] || ""} |"
+    "| #{get_key(risk, :risk) || ""} | #{get_key(risk, :likelihood) || ""} | #{get_key(risk, :impact) || ""} | #{get_key(risk, :mitigation) || ""} |"
   end
 
   defp format_order_section([]), do: ""
@@ -303,7 +317,7 @@ defmodule Albedo.Agents.ChangePlanner do
       order
       |> Enum.with_index(1)
       |> Enum.map_join("\n", fn {item, idx} ->
-        "#{idx}. **##{item["ticket_id"]}** - #{item["reason"] || ""}"
+        "#{idx}. **##{get_key(item, :ticket_id)}** - #{get_key(item, :reason) || ""}"
       end)
 
     """

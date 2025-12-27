@@ -84,7 +84,7 @@ defmodule Albedo.Search.FileScanner do
 
     language_counts =
       Enum.reduce(@language_extensions, %{}, fn {lang, exts}, acc ->
-        count = Enum.sum(for ext <- exts, do: Map.get(counts, ext, 0))
+        count = Enum.reduce(exts, 0, fn ext, sum -> sum + Map.get(counts, ext, 0) end)
         if count > 0, do: Map.put(acc, lang, count), else: acc
       end)
 
@@ -228,7 +228,11 @@ defmodule Albedo.Search.FileScanner do
 
   defp excluded?(path, exclude) do
     name = Path.basename(path)
-    Enum.any?(exclude, fn pattern -> name == pattern or String.contains?(path, pattern) end)
+    path_parts = Path.split(path)
+
+    Enum.any?(exclude, fn pattern ->
+      name == pattern or pattern in path_parts
+    end)
   end
 
   defp filter_by_extension(files, nil), do: files

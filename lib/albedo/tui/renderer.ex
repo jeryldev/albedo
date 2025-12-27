@@ -29,9 +29,7 @@ defmodule Albedo.TUI.Renderer do
     bg_cyan: "\e[46m",
     # Kanagawa colors (24-bit true color)
     kanagawa_orange: "\e[38;2;255;160;102m",
-    bg_kanagawa_sky_blue: "\e[48;2;127;180;202m",
-    # Dimmer background for inactive panel selection
-    bg_inactive_selection: "\e[48;2;70;70;80m"
+    bg_kanagawa_sky_blue: "\e[48;2;127;180;202m"
   }
 
   @doc """
