@@ -13,7 +13,9 @@ defmodule Albedo.TUI.State do
     :projects_dir,
     :current_project,
     :selected_ticket,
+    :viewed_ticket,
     :selected_file,
+    :viewed_file,
     :research_files,
     :active_panel,
     :detail_content,
@@ -73,7 +75,9 @@ defmodule Albedo.TUI.State do
           projects: [map()],
           current_project: non_neg_integer(),
           selected_ticket: non_neg_integer() | nil,
-          selected_file: non_neg_integer(),
+          viewed_ticket: non_neg_integer() | nil,
+          selected_file: non_neg_integer() | nil,
+          viewed_file: non_neg_integer() | nil,
           research_files: [research_file()],
           active_panel: panel(),
           detail_content: :ticket | :research,
@@ -111,7 +115,9 @@ defmodule Albedo.TUI.State do
       projects_dir: nil,
       current_project: 0,
       selected_ticket: nil,
-      selected_file: 0,
+      viewed_ticket: nil,
+      selected_file: nil,
+      viewed_file: nil,
       research_files: [],
       active_panel: :projects,
       detail_content: :ticket,
@@ -195,7 +201,9 @@ defmodule Albedo.TUI.State do
            | data: data,
              project_dir: project_dir,
              selected_ticket: nil,
+             viewed_ticket: nil,
              selected_file: nil,
+             viewed_file: nil,
              research_files: files,
              detail_scroll: 0
          }}
@@ -253,6 +261,18 @@ defmodule Albedo.TUI.State do
 
   def current_research_file(%__MODULE__{research_files: files, selected_file: idx}) do
     Enum.at(files, idx)
+  end
+
+  def view_current_ticket(%__MODULE__{selected_ticket: nil} = state), do: state
+
+  def view_current_ticket(%__MODULE__{selected_ticket: idx} = state) do
+    %{state | viewed_ticket: idx, detail_content: :ticket, detail_scroll: 0}
+  end
+
+  def view_current_file(%__MODULE__{selected_file: nil} = state), do: state
+
+  def view_current_file(%__MODULE__{selected_file: idx} = state) do
+    %{state | viewed_file: idx, detail_content: :research, detail_scroll: 0}
   end
 
   def move_up(%__MODULE__{active_panel: :projects} = state) do
@@ -328,12 +348,16 @@ defmodule Albedo.TUI.State do
   end
 
   def next_panel(%__MODULE__{active_panel: :tickets} = state) do
-    %{state | active_panel: :research}
+    state
+    |> sync_ticket_selection()
+    |> Map.put(:active_panel, :research)
     |> maybe_select_first_file()
   end
 
   def next_panel(%__MODULE__{active_panel: :research} = state) do
-    %{state | active_panel: :detail}
+    state
+    |> sync_file_selection()
+    |> Map.put(:active_panel, :detail)
   end
 
   def next_panel(%__MODULE__{active_panel: :detail} = state) do
@@ -348,12 +372,16 @@ defmodule Albedo.TUI.State do
   end
 
   def prev_panel(%__MODULE__{active_panel: :tickets} = state) do
-    %{state | active_panel: :projects}
+    state
+    |> sync_ticket_selection()
+    |> Map.put(:active_panel, :projects)
     |> sync_project_selection()
   end
 
   def prev_panel(%__MODULE__{active_panel: :research} = state) do
-    %{state | active_panel: :tickets}
+    state
+    |> sync_file_selection()
+    |> Map.put(:active_panel, :tickets)
     |> maybe_select_first_ticket()
   end
 
@@ -364,45 +392,24 @@ defmodule Albedo.TUI.State do
 
   @doc """
   Set active panel with auto-selection of first item if needed.
+  Syncs selection when leaving a panel.
   """
-  def set_active_panel(%__MODULE__{active_panel: :projects} = state, :tickets) do
+  def set_active_panel(%__MODULE__{active_panel: from} = state, to) do
     state
-    |> sync_project_selection()
-    |> Map.put(:active_panel, :tickets)
-    |> maybe_select_first_ticket()
+    |> sync_selection_on_leave(from)
+    |> Map.put(:active_panel, to)
+    |> auto_select_on_enter(to)
   end
 
-  def set_active_panel(%__MODULE__{} = state, :tickets) do
-    %{state | active_panel: :tickets}
-    |> maybe_select_first_ticket()
-  end
+  defp sync_selection_on_leave(state, :projects), do: sync_project_selection(state)
+  defp sync_selection_on_leave(state, :tickets), do: sync_ticket_selection(state)
+  defp sync_selection_on_leave(state, :research), do: sync_file_selection(state)
+  defp sync_selection_on_leave(state, _), do: state
 
-  def set_active_panel(%__MODULE__{active_panel: :projects} = state, :research) do
-    state
-    |> sync_project_selection()
-    |> Map.put(:active_panel, :research)
-    |> maybe_select_first_file()
-  end
-
-  def set_active_panel(%__MODULE__{} = state, :research) do
-    %{state | active_panel: :research}
-    |> maybe_select_first_file()
-  end
-
-  def set_active_panel(%__MODULE__{active_panel: :projects} = state, :detail) do
-    state
-    |> sync_project_selection()
-    |> Map.put(:active_panel, :detail)
-  end
-
-  def set_active_panel(%__MODULE__{} = state, :projects) do
-    %{state | active_panel: :projects}
-    |> sync_project_selection()
-  end
-
-  def set_active_panel(%__MODULE__{} = state, panel) do
-    %{state | active_panel: panel}
-  end
+  defp auto_select_on_enter(state, :projects), do: sync_project_selection(state)
+  defp auto_select_on_enter(state, :tickets), do: maybe_select_first_ticket(state)
+  defp auto_select_on_enter(state, :research), do: maybe_select_first_file(state)
+  defp auto_select_on_enter(state, _), do: state
 
   defp sync_project_selection(%{project_dir: nil} = state), do: state
 
@@ -413,6 +420,26 @@ defmodule Albedo.TUI.State do
       nil -> state
       index -> %{state | current_project: index}
     end
+  end
+
+  defp sync_ticket_selection(%{viewed_ticket: nil, data: %{tickets: [_ | _]}} = state) do
+    %{state | selected_ticket: 0}
+  end
+
+  defp sync_ticket_selection(%{viewed_ticket: nil} = state), do: state
+
+  defp sync_ticket_selection(%{viewed_ticket: idx} = state) do
+    %{state | selected_ticket: idx}
+  end
+
+  defp sync_file_selection(%{viewed_file: nil, research_files: [_ | _]} = state) do
+    %{state | selected_file: 0}
+  end
+
+  defp sync_file_selection(%{viewed_file: nil} = state), do: state
+
+  defp sync_file_selection(%{viewed_file: idx} = state) do
+    %{state | selected_file: idx}
   end
 
   defp maybe_select_first_ticket(%{selected_ticket: nil, data: %{tickets: [_ | _]}} = state) do

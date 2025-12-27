@@ -380,7 +380,9 @@ defmodule Albedo.TUI do
         State.set_message(state, "No ticket selected")
 
       _ticket ->
-        %{state | active_panel: :detail, detail_content: :ticket} |> State.reset_detail_scroll()
+        state
+        |> State.view_current_ticket()
+        |> Map.put(:active_panel, :detail)
     end
   end
 
@@ -390,7 +392,9 @@ defmodule Albedo.TUI do
         State.set_message(state, "No file selected")
 
       _file ->
-        %{state | active_panel: :detail, detail_content: :research} |> State.reset_detail_scroll()
+        state
+        |> State.view_current_file()
+        |> Map.put(:active_panel, :detail)
     end
   end
 
