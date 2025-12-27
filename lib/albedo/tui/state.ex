@@ -58,7 +58,7 @@ defmodule Albedo.TUI.State do
           task: String.t(),
           name_buffer: String.t(),
           task_buffer: String.t(),
-          active_field: :name | :task,
+          active_field: :name | :title | :task,
           cursor: non_neg_integer(),
           logs: [String.t()],
           result: map() | nil,
@@ -321,7 +321,9 @@ defmodule Albedo.TUI.State do
   end
 
   def next_panel(%__MODULE__{active_panel: :projects} = state) do
-    %{state | active_panel: :tickets}
+    state
+    |> sync_project_selection()
+    |> Map.put(:active_panel, :tickets)
     |> maybe_select_first_ticket()
   end
 
@@ -336,14 +338,18 @@ defmodule Albedo.TUI.State do
 
   def next_panel(%__MODULE__{active_panel: :detail} = state) do
     %{state | active_panel: :projects}
+    |> sync_project_selection()
   end
 
   def prev_panel(%__MODULE__{active_panel: :projects} = state) do
-    %{state | active_panel: :detail}
+    state
+    |> sync_project_selection()
+    |> Map.put(:active_panel, :detail)
   end
 
   def prev_panel(%__MODULE__{active_panel: :tickets} = state) do
     %{state | active_panel: :projects}
+    |> sync_project_selection()
   end
 
   def prev_panel(%__MODULE__{active_panel: :research} = state) do
@@ -359,9 +365,23 @@ defmodule Albedo.TUI.State do
   @doc """
   Set active panel with auto-selection of first item if needed.
   """
+  def set_active_panel(%__MODULE__{active_panel: :projects} = state, :tickets) do
+    state
+    |> sync_project_selection()
+    |> Map.put(:active_panel, :tickets)
+    |> maybe_select_first_ticket()
+  end
+
   def set_active_panel(%__MODULE__{} = state, :tickets) do
     %{state | active_panel: :tickets}
     |> maybe_select_first_ticket()
+  end
+
+  def set_active_panel(%__MODULE__{active_panel: :projects} = state, :research) do
+    state
+    |> sync_project_selection()
+    |> Map.put(:active_panel, :research)
+    |> maybe_select_first_file()
   end
 
   def set_active_panel(%__MODULE__{} = state, :research) do
@@ -369,8 +389,30 @@ defmodule Albedo.TUI.State do
     |> maybe_select_first_file()
   end
 
+  def set_active_panel(%__MODULE__{active_panel: :projects} = state, :detail) do
+    state
+    |> sync_project_selection()
+    |> Map.put(:active_panel, :detail)
+  end
+
+  def set_active_panel(%__MODULE__{} = state, :projects) do
+    %{state | active_panel: :projects}
+    |> sync_project_selection()
+  end
+
   def set_active_panel(%__MODULE__{} = state, panel) do
     %{state | active_panel: panel}
+  end
+
+  defp sync_project_selection(%{project_dir: nil} = state), do: state
+
+  defp sync_project_selection(%{project_dir: project_dir, projects: projects} = state) do
+    loaded_id = Path.basename(project_dir)
+
+    case Enum.find_index(projects, &(&1.id == loaded_id)) do
+      nil -> state
+      index -> %{state | current_project: index}
+    end
   end
 
   defp maybe_select_first_ticket(%{selected_ticket: nil, data: %{tickets: [_ | _]}} = state) do
@@ -632,15 +674,18 @@ defmodule Albedo.TUI.State do
   end
 
   def enter_modal(%__MODULE__{} = state, type) do
+    default_path = if type == :analyze, do: File.cwd!(), else: ""
+
     modal_data = %{
       type: type,
       phase: :input,
       name: "",
       task: "",
-      name_buffer: "",
+      name_buffer: default_path,
+      title_buffer: "",
       task_buffer: "",
       active_field: :name,
-      cursor: 0,
+      cursor: String.length(default_path),
       logs: [],
       result: nil,
       current_agent: 0,
@@ -724,6 +769,27 @@ defmodule Albedo.TUI.State do
     %{state | modal_data: updated_data}
   end
 
+  def modal_next_field(
+        %__MODULE__{modal: :analyze, modal_data: %{active_field: :name} = data} = state
+      ) do
+    updated_data = %{data | active_field: :title, cursor: String.length(data.title_buffer)}
+    %{state | modal_data: updated_data}
+  end
+
+  def modal_next_field(
+        %__MODULE__{modal: :analyze, modal_data: %{active_field: :title} = data} = state
+      ) do
+    updated_data = %{data | active_field: :task, cursor: String.length(data.task_buffer)}
+    %{state | modal_data: updated_data}
+  end
+
+  def modal_next_field(
+        %__MODULE__{modal: :analyze, modal_data: %{active_field: :task} = data} = state
+      ) do
+    updated_data = %{data | active_field: :name, cursor: String.length(data.name_buffer)}
+    %{state | modal_data: updated_data}
+  end
+
   def modal_next_field(%__MODULE__{modal_data: %{active_field: :name} = data} = state) do
     updated_data = %{data | active_field: :task, cursor: String.length(data.task_buffer)}
     %{state | modal_data: updated_data}
@@ -740,6 +806,9 @@ defmodule Albedo.TUI.State do
 
   defp get_active_modal_buffer(%{active_field: :name, name_buffer: buffer}),
     do: {:name_buffer, buffer}
+
+  defp get_active_modal_buffer(%{active_field: :title, title_buffer: buffer}),
+    do: {:title_buffer, buffer}
 
   defp get_active_modal_buffer(%{active_field: :task, task_buffer: buffer}),
     do: {:task_buffer, buffer}

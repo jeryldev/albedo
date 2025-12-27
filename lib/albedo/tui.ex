@@ -7,9 +7,7 @@ defmodule Albedo.TUI do
   """
 
   alias Albedo.{Config, Project, Tickets}
-  alias Albedo.TUI.{Renderer, State, Terminal}
-
-  require Logger
+  alias Albedo.TUI.{LogHandler, Renderer, State, Terminal}
 
   @doc """
   Starts the TUI application.
@@ -39,6 +37,7 @@ defmodule Albedo.TUI do
   end
 
   defp cleanup(old_settings) do
+    LogHandler.uninstall()
     Terminal.show_cursor()
     Terminal.exit_alternate_screen()
     Terminal.restore_mode(old_settings)
@@ -76,6 +75,11 @@ defmodule Albedo.TUI do
       {:agent_progress, current, total, agent_name} ->
         state
         |> handle_agent_progress(current, total, agent_name)
+        |> run_loop(projects_dir, input_pid)
+
+      {:log_message, message} ->
+        state
+        |> handle_log_message(message)
         |> run_loop(projects_dir, input_pid)
     end
   end
@@ -301,7 +305,7 @@ defmodule Albedo.TUI do
          _projects_dir
        )
        when name == "" or task == "" do
-    State.set_message(state, "Both name and task are required")
+    State.add_modal_log(state, "Error: Both fields are required")
   end
 
   defp handle_modal_submit(%State{modal: :plan} = state, projects_dir) do
@@ -312,10 +316,12 @@ defmodule Albedo.TUI do
          %State{modal: :analyze, modal_data: %{name_buffer: path}} = state,
          projects_dir
        ) do
-    if File.dir?(path) do
-      run_analyze(state, projects_dir)
+    expanded_path = Path.expand(path)
+
+    if File.dir?(expanded_path) do
+      run_analyze(state, expanded_path, projects_dir)
     else
-      State.set_message(state, "Directory not found: #{path}")
+      State.add_modal_log(state, "Error: Directory not found: #{path}")
     end
   end
 
@@ -325,9 +331,18 @@ defmodule Albedo.TUI do
     state
     |> State.exit_modal()
     |> State.load_projects(projects_dir)
-    |> Map.put(:current_project, 0)
+    |> select_created_project(result)
     |> maybe_load_created_project(result, projects_dir)
   end
+
+  defp select_created_project(state, %{project_id: project_id}) do
+    index =
+      Enum.find_index(state.projects, fn p -> p.id == project_id end) || 0
+
+    %{state | current_project: index}
+  end
+
+  defp select_created_project(state, _), do: %{state | current_project: 0}
 
   defp maybe_load_created_project(state, %{project_id: project_id}, projects_dir) do
     project_path = Path.join(projects_dir, project_id)
@@ -797,17 +812,16 @@ defmodule Albedo.TUI do
     task = state.modal_data.task_buffer
     parent = self()
 
+    LogHandler.install(parent)
+
     modal_state =
       state
       |> State.start_modal_operation()
-      |> State.add_modal_log("Starting plan...")
       |> State.add_modal_log("Project: #{name}")
       |> State.add_modal_log("Task: #{task}")
       |> State.add_modal_log("")
 
     spawn_link(fn ->
-      Logger.put_process_level(self(), :none)
-
       result =
         Project.start_greenfield(name, task,
           stream: false,
@@ -821,36 +835,43 @@ defmodule Albedo.TUI do
     modal_state
   end
 
-  defp run_analyze(state, _projects_dir) do
-    path = state.modal_data.name_buffer
+  defp run_analyze(state, codebase_path, _projects_dir) do
     task = state.modal_data.task_buffer
+    title = state.modal_data.title_buffer
     parent = self()
+
+    LogHandler.install(parent)
 
     modal_state =
       state
       |> State.start_modal_operation()
-      |> State.add_modal_log("Starting analysis...")
-      |> State.add_modal_log("Codebase: #{path}")
+      |> State.add_modal_log("Codebase: #{codebase_path}")
+      |> maybe_add_title_log(title)
       |> State.add_modal_log("Task: #{task}")
       |> State.add_modal_log("")
 
+    opts = [
+      stream: false,
+      silent: true,
+      progress_pid: parent
+    ]
+
+    opts = if title != "", do: Keyword.put(opts, :project, title), else: opts
+
     spawn_link(fn ->
-      Logger.put_process_level(self(), :none)
-
-      result =
-        Project.start(path, task,
-          stream: false,
-          silent: true,
-          progress_pid: parent
-        )
-
+      result = Project.start(codebase_path, task, opts)
       send(parent, {:operation_complete, {:analyze, result}})
     end)
 
     modal_state
   end
 
+  defp maybe_add_title_log(state, ""), do: state
+  defp maybe_add_title_log(state, title), do: State.add_modal_log(state, "Project: #{title}")
+
   defp handle_operation_complete(state, {:plan, result}, projects_dir) do
+    LogHandler.uninstall()
+
     case result do
       {:ok, project_id, _result} ->
         state
@@ -870,6 +891,8 @@ defmodule Albedo.TUI do
   end
 
   defp handle_operation_complete(state, {:analyze, result}, projects_dir) do
+    LogHandler.uninstall()
+
     case result do
       {:ok, project_id, _result} ->
         state
@@ -896,6 +919,14 @@ defmodule Albedo.TUI do
     state
     |> State.update_agent_progress(current, total, agent_name)
     |> State.add_modal_log("#{agent_name}...")
+  end
+
+  defp handle_log_message(state, message) do
+    if state.modal != nil and state.modal_data.phase == :running do
+      State.add_modal_log(state, message)
+    else
+      state
+    end
   end
 
   defp load_created_project(state, output_dir) do

@@ -316,10 +316,14 @@ defmodule Albedo.TUI.Renderer do
 
   defp build_modal_all_content(state, width, max_lines) do
     data = state.modal_data
-    name_label = if state.modal == :plan, do: "Project Name:", else: "Codebase Path:"
+    is_analyze = state.modal == :analyze
+    name_label = if is_analyze, do: "Codebase Path:", else: "Project Name:"
 
     name_lines = wrap_field_text(data.name_buffer, width - 3)
     name_line_count = max(1, length(name_lines))
+
+    title_lines = if is_analyze, do: wrap_field_text(data.title_buffer, width - 3), else: []
+    title_line_count = if is_analyze, do: max(1, length(title_lines)), else: 0
 
     task_lines = wrap_field_text(data.task_buffer, width - 3)
     task_line_count = max(1, length(task_lines))
@@ -332,6 +336,19 @@ defmodule Albedo.TUI.Renderer do
       lines ++
         build_multiline_field(name_lines, data.cursor, width, data.active_field == :name)
 
+    lines =
+      if is_analyze do
+        lines = lines ++ [""]
+
+        lines =
+          lines ++ [build_field_label("Project Name (optional):", data.active_field == :title)]
+
+        lines ++
+          build_multiline_field(title_lines, data.cursor, width, data.active_field == :title)
+      else
+        lines
+      end
+
     lines = lines ++ [""]
     lines = lines ++ [build_field_label("Task Description:", data.active_field == :task)]
 
@@ -339,7 +356,9 @@ defmodule Albedo.TUI.Renderer do
       lines ++
         build_multiline_field(task_lines, data.cursor, width, data.active_field == :task)
 
-    form_height = 1 + name_line_count + 1 + 1 + task_line_count
+    form_height =
+      1 + name_line_count + if(is_analyze, do: 1 + 1 + title_line_count, else: 0) + 1 + 1 +
+        task_line_count
 
     lines =
       if data.logs != [] or data.phase != :input do

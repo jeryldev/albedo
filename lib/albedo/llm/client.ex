@@ -1,21 +1,25 @@
 defmodule Albedo.LLM.Client do
   @moduledoc """
-  Provider-agnostic LLM client with retry logic.
+  Provider-agnostic LLM client with exponential backoff retry.
   """
 
   alias Albedo.Config
   alias Albedo.LLM.{Claude, Gemini, OpenAI}
+  alias Albedo.Utils.Backoff
 
   require Logger
-
-  @max_retries 2
-  @retry_delay_ms 2000
 
   @providers %{
     "gemini" => Gemini,
     "claude" => Claude,
     "openai" => OpenAI
   }
+
+  @retry_opts [
+    base_delay_ms: 1000,
+    max_delay_ms: 30_000,
+    max_retries: 3
+  ]
 
   @doc """
   Send a chat request to the configured LLM provider.
@@ -27,14 +31,13 @@ defmodule Albedo.LLM.Client do
   """
   def chat(prompt, opts \\ []) do
     config = Config.load!()
+    provider = Config.provider(config)
+    provider_module = @providers[provider]
 
-    case do_chat(config, prompt, opts, 0) do
-      {:ok, response} ->
-        {:ok, response}
-
-      {:error, reason} ->
-        Logger.error("LLM request failed: #{inspect(reason)}")
-        {:error, reason}
+    if provider_module do
+      do_chat_with_backoff(config, prompt, opts, provider_module)
+    else
+      {:error, {:unknown_provider, provider}}
     end
   end
 
@@ -48,20 +51,18 @@ defmodule Albedo.LLM.Client do
     end
   end
 
-  defp do_chat(config, prompt, opts, attempt) when attempt < @max_retries do
-    provider = Config.provider(config)
-    provider_module = @providers[provider]
+  defp do_chat_with_backoff(config, prompt, opts, provider_module) do
+    retry_opts =
+      @retry_opts
+      |> Keyword.put(:retry_on, &Backoff.retryable_llm_error?/1)
+      |> Keyword.put(:on_retry, &log_retry/3)
 
-    if provider_module do
-      result = execute_provider_chat(config, prompt, opts, provider_module)
-      handle_chat_result(result, config, prompt, opts, attempt)
-    else
-      {:error, {:unknown_provider, provider}}
-    end
-  end
-
-  defp do_chat(_config, _prompt, _opts, _attempt) do
-    {:error, :max_retries_exceeded}
+    Backoff.with_retry(
+      fn ->
+        execute_provider_chat(config, prompt, opts, provider_module)
+      end,
+      retry_opts
+    )
   end
 
   defp execute_provider_chat(config, prompt, opts, provider_module) do
@@ -75,54 +76,20 @@ defmodule Albedo.LLM.Client do
     provider_module.chat(prompt, request_opts)
   end
 
-  defp handle_chat_result({:ok, response}, _, _, _, _), do: {:ok, response}
-  defp handle_chat_result({:error, :rate_limited}, _, _, _, _), do: {:error, :rate_limited}
-
-  defp handle_chat_result({:error, :timeout}, config, prompt, opts, attempt) do
-    retry_with_log(config, prompt, opts, attempt, "Request timed out")
+  defp log_retry(attempt, delay_ms, reason) do
+    Logger.warning(
+      "LLM request failed: #{format_error(reason)}, " <>
+        "retrying in #{delay_ms}ms (attempt #{attempt}/#{@retry_opts[:max_retries]})"
+    )
   end
 
-  defp handle_chat_result(
-         {:error, {:request_failed, %{reason: :timeout}}},
-         config,
-         prompt,
-         opts,
-         attempt
-       ) do
-    retry_with_log(config, prompt, opts, attempt, "Connection timed out")
-  end
-
-  defp handle_chat_result(
-         {:error, {:request_failed, %{reason: :econnrefused}}},
-         config,
-         prompt,
-         opts,
-         attempt
-       ) do
-    retry_with_log(config, prompt, opts, attempt, "Connection refused")
-  end
-
-  defp handle_chat_result({:error, {:request_failed, _}}, config, prompt, opts, attempt) do
-    retry_with_log(config, prompt, opts, attempt, "Network error")
-  end
-
-  defp handle_chat_result({:error, {:http_error, status, _}}, config, prompt, opts, attempt)
-       when status >= 500 do
-    retry_with_log(config, prompt, opts, attempt, "Server error #{status}")
-  end
-
-  defp handle_chat_result({:error, {:http_error, status}}, config, prompt, opts, attempt)
-       when status >= 500 do
-    retry_with_log(config, prompt, opts, attempt, "Server error #{status}")
-  end
-
-  defp handle_chat_result({:error, reason}, _, _, _, _), do: {:error, reason}
-
-  defp retry_with_log(config, prompt, opts, attempt, message) do
-    Logger.warning("#{message}, retrying (attempt #{attempt + 1}/#{@max_retries})")
-    Process.sleep(@retry_delay_ms)
-    do_chat(config, prompt, opts, attempt + 1)
-  end
+  defp format_error(:timeout), do: "timeout"
+  defp format_error(:rate_limited), do: "rate limited"
+  defp format_error({:request_failed, %{reason: reason}}), do: "connection error: #{reason}"
+  defp format_error({:request_failed, _}), do: "network error"
+  defp format_error({:http_error, status, _}), do: "HTTP #{status}"
+  defp format_error({:http_error, status}), do: "HTTP #{status}"
+  defp format_error(reason), do: inspect(reason)
 
   @doc """
   Check if a provider is available (has API key configured).

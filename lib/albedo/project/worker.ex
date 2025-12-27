@@ -4,7 +4,7 @@ defmodule Albedo.Project.Worker do
   Coordinates agents through all phases and manages project state.
   """
 
-  use GenServer
+  use GenServer, restart: :temporary
 
   alias Albedo.Agents
   alias Albedo.Project.{Registry, State}
