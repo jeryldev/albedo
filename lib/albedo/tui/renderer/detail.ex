@@ -7,8 +7,8 @@ defmodule Albedo.TUI.Renderer.Detail do
 
   def build_right_panel_char(panel_row, state, width, height) do
     colors = Utils.colors()
-    border_chars = Utils.border_chars()
     is_active = state.active_panel == :detail or state.mode == :edit
+    border_chars = Utils.border_chars(is_active)
     border_color = if is_active, do: colors.kanagawa_orange, else: colors.white
     title = if state.mode == :edit, do: " Edit Ticket ", else: " [4] Detail "
 
@@ -20,7 +20,7 @@ defmodule Albedo.TUI.Renderer.Detail do
         Utils.build_top_border(title, width, border_color, is_active)
 
       panel_row == height ->
-        Utils.build_bottom_border(width, border_color)
+        Utils.build_bottom_border(width, border_color, is_active)
 
       true ->
         content_row = panel_row - 2

@@ -29,8 +29,8 @@ defmodule Albedo.TUI.Renderer.Panels do
 
   defp build_projects_line(row, state, width, height) do
     colors = Utils.colors()
-    border_chars = Utils.border_chars()
     is_active = state.active_panel == :projects
+    border_chars = Utils.border_chars(is_active)
     border_color = if is_active, do: colors.kanagawa_orange, else: colors.white
 
     cond do
@@ -38,7 +38,7 @@ defmodule Albedo.TUI.Renderer.Panels do
         Utils.build_top_border(" [1] Projects ", width, border_color, is_active)
 
       row == height ->
-        Utils.build_bottom_border(width, border_color)
+        Utils.build_bottom_border(width, border_color, is_active)
 
       true ->
         content_row = row - 2
@@ -73,8 +73,8 @@ defmodule Albedo.TUI.Renderer.Panels do
 
   defp build_tickets_line(row, state, width, height) do
     colors = Utils.colors()
-    border_chars = Utils.border_chars()
     is_active = state.active_panel == :tickets
+    border_chars = Utils.border_chars(is_active)
     border_color = if is_active, do: colors.kanagawa_orange, else: colors.white
 
     cond do
@@ -82,7 +82,7 @@ defmodule Albedo.TUI.Renderer.Panels do
         Utils.build_top_border(" [2] Tickets ", width, border_color, is_active)
 
       row == height ->
-        Utils.build_bottom_border(width, border_color)
+        Utils.build_bottom_border(width, border_color, is_active)
 
       true ->
         content_row = row - 2
@@ -135,8 +135,8 @@ defmodule Albedo.TUI.Renderer.Panels do
 
   defp build_research_line(row, state, width, height) do
     colors = Utils.colors()
-    border_chars = Utils.border_chars()
     is_active = state.active_panel == :research
+    border_chars = Utils.border_chars(is_active)
     border_color = if is_active, do: colors.kanagawa_orange, else: colors.white
 
     cond do
@@ -144,7 +144,7 @@ defmodule Albedo.TUI.Renderer.Panels do
         Utils.build_top_border(" [3] Research ", width, border_color, is_active)
 
       row == height ->
-        Utils.build_bottom_border(width, border_color)
+        Utils.build_bottom_border(width, border_color, is_active)
 
       true ->
         content_row = row - 2

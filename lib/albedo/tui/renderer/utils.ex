@@ -12,6 +12,15 @@ defmodule Albedo.TUI.Renderer.Utils do
     vertical: "│"
   }
 
+  @border_chars_heavy %{
+    top_left: "┏",
+    top_right: "┓",
+    bottom_left: "┗",
+    bottom_right: "┛",
+    horizontal: "━",
+    vertical: "┃"
+  }
+
   @colors %{
     reset: "\e[0m",
     bold: "\e[1m",
@@ -30,9 +39,13 @@ defmodule Albedo.TUI.Renderer.Utils do
 
   def colors, do: @colors
   def border_chars, do: @border_chars
+  def border_chars_heavy, do: @border_chars_heavy
+  def border_chars(true), do: @border_chars_heavy
+  def border_chars(false), do: @border_chars
 
   def build_top_border(title, width, border_color, is_active) do
     colors = @colors
+    chars = if is_active, do: @border_chars_heavy, else: @border_chars
     title_color = if is_active, do: colors.bold <> colors.green, else: colors.white
     bar_width = width - 2
     title_len = String.length(title)
@@ -40,20 +53,22 @@ defmodule Albedo.TUI.Renderer.Utils do
     right_bar = bar_width - title_len - left_bar
 
     border_color <>
-      @border_chars.top_left <>
-      String.duplicate(@border_chars.horizontal, left_bar) <>
+      chars.top_left <>
+      String.duplicate(chars.horizontal, left_bar) <>
       title_color <>
       title <>
       border_color <>
-      String.duplicate(@border_chars.horizontal, right_bar) <>
-      @border_chars.top_right <> colors.reset
+      String.duplicate(chars.horizontal, right_bar) <>
+      chars.top_right <> colors.reset
   end
 
-  def build_bottom_border(width, border_color) do
+  def build_bottom_border(width, border_color, is_active \\ false) do
+    chars = if is_active, do: @border_chars_heavy, else: @border_chars
+
     border_color <>
-      @border_chars.bottom_left <>
-      String.duplicate(@border_chars.horizontal, width - 2) <>
-      @border_chars.bottom_right <> @colors.reset
+      chars.bottom_left <>
+      String.duplicate(chars.horizontal, width - 2) <>
+      chars.bottom_right <> @colors.reset
   end
 
   def wrap_text(text, width) when is_binary(text) and width > 0 do
