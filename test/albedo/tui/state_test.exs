@@ -744,6 +744,230 @@ defmodule Albedo.TUI.StateTest do
     end
   end
 
+  describe "nil selection handling" do
+    test "move_up with nil selected_ticket selects first ticket" do
+      data = build_tickets_data([build_ticket("1"), build_ticket("2")])
+      state = %State{State.new() | selected_ticket: nil, active_panel: :tickets, data: data}
+
+      result = State.move_up(state)
+
+      assert result.selected_ticket == 0
+    end
+
+    test "move_up with nil selected_ticket and empty tickets does nothing" do
+      data = build_tickets_data([])
+      state = %State{State.new() | selected_ticket: nil, active_panel: :tickets, data: data}
+
+      result = State.move_up(state)
+
+      assert result.selected_ticket == nil
+    end
+
+    test "move_down with nil selected_ticket selects first ticket" do
+      data = build_tickets_data([build_ticket("1"), build_ticket("2")])
+      state = %State{State.new() | selected_ticket: nil, active_panel: :tickets, data: data}
+
+      result = State.move_down(state)
+
+      assert result.selected_ticket == 0
+    end
+
+    test "move_down with nil selected_ticket and empty tickets does nothing" do
+      data = build_tickets_data([])
+      state = %State{State.new() | selected_ticket: nil, active_panel: :tickets, data: data}
+
+      result = State.move_down(state)
+
+      assert result.selected_ticket == nil
+    end
+
+    test "move_up with nil selected_file does nothing" do
+      files = [%{name: "a.md", path: "/a.md", type: :markdown}]
+
+      state = %State{
+        State.new()
+        | selected_file: nil,
+          active_panel: :research,
+          research_files: files
+      }
+
+      result = State.move_up(state)
+
+      assert result.selected_file == nil
+    end
+
+    test "move_down with nil selected_file selects first file" do
+      files = [%{name: "a.md", path: "/a.md", type: :markdown}]
+
+      state = %State{
+        State.new()
+        | selected_file: nil,
+          active_panel: :research,
+          research_files: files
+      }
+
+      result = State.move_down(state)
+
+      assert result.selected_file == 0
+    end
+
+    test "move_down with nil selected_file and empty files does nothing" do
+      state = %State{
+        State.new()
+        | selected_file: nil,
+          active_panel: :research,
+          research_files: []
+      }
+
+      result = State.move_down(state)
+
+      assert result.selected_file == nil
+    end
+
+    test "current_ticket returns nil when selected_ticket is nil" do
+      data = build_tickets_data([build_ticket("1")])
+      state = %State{State.new() | data: data, selected_ticket: nil}
+
+      assert State.current_ticket(state) == nil
+    end
+
+    test "current_research_file returns nil when selected_file is nil" do
+      files = [%{name: "a.md", path: "/a.md", type: :markdown}]
+      state = %State{State.new() | research_files: files, selected_file: nil}
+
+      assert State.current_research_file(state) == nil
+    end
+
+    test "current_research_file returns nil when research_files is empty" do
+      state = %State{State.new() | research_files: [], selected_file: 0}
+
+      assert State.current_research_file(state) == nil
+    end
+  end
+
+  describe "set_active_panel/2" do
+    test "sets active panel to tickets and auto-selects first ticket" do
+      data = build_tickets_data([build_ticket("1"), build_ticket("2")])
+      state = %State{State.new() | data: data, selected_ticket: nil}
+
+      result = State.set_active_panel(state, :tickets)
+
+      assert result.active_panel == :tickets
+      assert result.selected_ticket == 0
+    end
+
+    test "sets active panel to tickets without auto-select when already selected" do
+      data = build_tickets_data([build_ticket("1"), build_ticket("2")])
+      state = %State{State.new() | data: data, selected_ticket: 1}
+
+      result = State.set_active_panel(state, :tickets)
+
+      assert result.active_panel == :tickets
+      assert result.selected_ticket == 1
+    end
+
+    test "sets active panel to research and auto-selects first file" do
+      files = [%{name: "a.md", path: "/a.md", type: :markdown}]
+      state = %State{State.new() | research_files: files, selected_file: nil}
+
+      result = State.set_active_panel(state, :research)
+
+      assert result.active_panel == :research
+      assert result.selected_file == 0
+    end
+
+    test "sets active panel to research without auto-select when already selected" do
+      files = [%{name: "a.md", path: "/a.md", type: :markdown}]
+      state = %State{State.new() | research_files: files, selected_file: 0}
+
+      result = State.set_active_panel(state, :research)
+
+      assert result.active_panel == :research
+      assert result.selected_file == 0
+    end
+
+    test "sets active panel to projects without auto-selection" do
+      state = State.new()
+
+      result = State.set_active_panel(state, :projects)
+
+      assert result.active_panel == :projects
+    end
+
+    test "sets active panel to detail without auto-selection" do
+      state = State.new()
+
+      result = State.set_active_panel(state, :detail)
+
+      assert result.active_panel == :detail
+    end
+  end
+
+  describe "next_panel/1 with auto-selection" do
+    test "projects to tickets auto-selects first ticket" do
+      data = build_tickets_data([build_ticket("1")])
+      state = %State{State.new() | data: data, selected_ticket: nil, active_panel: :projects}
+
+      result = State.next_panel(state)
+
+      assert result.active_panel == :tickets
+      assert result.selected_ticket == 0
+    end
+
+    test "tickets to research auto-selects first file" do
+      files = [%{name: "a.md", path: "/a.md", type: :markdown}]
+
+      state = %State{
+        State.new()
+        | research_files: files,
+          selected_file: nil,
+          active_panel: :tickets
+      }
+
+      result = State.next_panel(state)
+
+      assert result.active_panel == :research
+      assert result.selected_file == 0
+    end
+
+    test "tickets to research does not auto-select when no files" do
+      state = %State{State.new() | research_files: [], selected_file: nil, active_panel: :tickets}
+
+      result = State.next_panel(state)
+
+      assert result.active_panel == :research
+      assert result.selected_file == nil
+    end
+  end
+
+  describe "prev_panel/1 with auto-selection" do
+    test "research to tickets auto-selects first ticket" do
+      data = build_tickets_data([build_ticket("1")])
+      state = %State{State.new() | data: data, selected_ticket: nil, active_panel: :research}
+
+      result = State.prev_panel(state)
+
+      assert result.active_panel == :tickets
+      assert result.selected_ticket == 0
+    end
+
+    test "detail to research auto-selects first file" do
+      files = [%{name: "a.md", path: "/a.md", type: :markdown}]
+
+      state = %State{
+        State.new()
+        | research_files: files,
+          selected_file: nil,
+          active_panel: :detail
+      }
+
+      result = State.prev_panel(state)
+
+      assert result.active_panel == :research
+      assert result.selected_file == 0
+    end
+  end
+
   defp build_tickets_data(tickets) do
     %{
       project_id: "test-project",

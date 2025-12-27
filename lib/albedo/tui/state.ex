@@ -195,7 +195,7 @@ defmodule Albedo.TUI.State do
            | data: data,
              project_dir: project_dir,
              selected_ticket: nil,
-             selected_file: 0,
+             selected_file: nil,
              research_files: files,
              detail_scroll: 0
          }}
@@ -249,6 +249,7 @@ defmodule Albedo.TUI.State do
   end
 
   def current_research_file(%__MODULE__{research_files: []}), do: nil
+  def current_research_file(%__MODULE__{selected_file: nil}), do: nil
 
   def current_research_file(%__MODULE__{research_files: files, selected_file: idx}) do
     Enum.at(files, idx)
@@ -271,6 +272,7 @@ defmodule Albedo.TUI.State do
   end
 
   def move_up(%__MODULE__{active_panel: :research, research_files: []} = state), do: state
+  def move_up(%__MODULE__{active_panel: :research, selected_file: nil} = state), do: state
 
   def move_up(%__MODULE__{active_panel: :research} = state) do
     new_idx = max(0, state.selected_file - 1)
@@ -302,6 +304,12 @@ defmodule Albedo.TUI.State do
 
   def move_down(%__MODULE__{active_panel: :research, research_files: []} = state), do: state
 
+  def move_down(
+        %__MODULE__{active_panel: :research, selected_file: nil, research_files: files} = state
+      ) do
+    if files != [], do: %{state | selected_file: 0, detail_scroll: 0}, else: state
+  end
+
   def move_down(%__MODULE__{active_panel: :research, research_files: files} = state) do
     max_idx = max(0, length(files) - 1)
     new_idx = min(max_idx, state.selected_file + 1)
@@ -314,10 +322,12 @@ defmodule Albedo.TUI.State do
 
   def next_panel(%__MODULE__{active_panel: :projects} = state) do
     %{state | active_panel: :tickets}
+    |> maybe_select_first_ticket()
   end
 
   def next_panel(%__MODULE__{active_panel: :tickets} = state) do
     %{state | active_panel: :research}
+    |> maybe_select_first_file()
   end
 
   def next_panel(%__MODULE__{active_panel: :research} = state) do
@@ -338,11 +348,42 @@ defmodule Albedo.TUI.State do
 
   def prev_panel(%__MODULE__{active_panel: :research} = state) do
     %{state | active_panel: :tickets}
+    |> maybe_select_first_ticket()
   end
 
   def prev_panel(%__MODULE__{active_panel: :detail} = state) do
     %{state | active_panel: :research}
+    |> maybe_select_first_file()
   end
+
+  @doc """
+  Set active panel with auto-selection of first item if needed.
+  """
+  def set_active_panel(%__MODULE__{} = state, :tickets) do
+    %{state | active_panel: :tickets}
+    |> maybe_select_first_ticket()
+  end
+
+  def set_active_panel(%__MODULE__{} = state, :research) do
+    %{state | active_panel: :research}
+    |> maybe_select_first_file()
+  end
+
+  def set_active_panel(%__MODULE__{} = state, panel) do
+    %{state | active_panel: panel}
+  end
+
+  defp maybe_select_first_ticket(%{selected_ticket: nil, data: %{tickets: [_ | _]}} = state) do
+    %{state | selected_ticket: 0}
+  end
+
+  defp maybe_select_first_ticket(state), do: state
+
+  defp maybe_select_first_file(%{selected_file: nil, research_files: [_ | _]} = state) do
+    %{state | selected_file: 0}
+  end
+
+  defp maybe_select_first_file(state), do: state
 
   def reset_detail_scroll(%__MODULE__{} = state) do
     %{state | detail_scroll: 0}

@@ -199,10 +199,10 @@ defmodule Albedo.TUI do
   defp handle_char(state, "x", _projects_dir), do: handle_delete(state)
   defp handle_char(state, "X", _projects_dir), do: handle_delete(state)
   defp handle_char(state, "?", _projects_dir), do: State.enter_help_mode(state)
-  defp handle_char(state, "1", _projects_dir), do: %{state | active_panel: :projects}
-  defp handle_char(state, "2", _projects_dir), do: %{state | active_panel: :tickets}
-  defp handle_char(state, "3", _projects_dir), do: %{state | active_panel: :research}
-  defp handle_char(state, "4", _projects_dir), do: %{state | active_panel: :detail}
+  defp handle_char(state, "1", _projects_dir), do: State.set_active_panel(state, :projects)
+  defp handle_char(state, "2", _projects_dir), do: State.set_active_panel(state, :tickets)
+  defp handle_char(state, "3", _projects_dir), do: State.set_active_panel(state, :research)
+  defp handle_char(state, "4", _projects_dir), do: State.set_active_panel(state, :detail)
   defp handle_char(state, _, _projects_dir), do: state
 
   defp dispatch_help_mode(state, :escape), do: State.exit_help_mode(state)
@@ -348,7 +348,7 @@ defmodule Albedo.TUI do
           {:ok, new_state} ->
             new_state
             |> State.set_message("Loaded #{length(new_state.data.tickets)} tickets")
-            |> Map.put(:active_panel, :tickets)
+            |> State.set_active_panel(:tickets)
 
           {:error, :not_found} ->
             State.set_message(state, "No tickets.json found")
@@ -901,7 +901,7 @@ defmodule Albedo.TUI do
   defp load_created_project(state, output_dir) do
     case State.load_tickets(state, output_dir) do
       {:ok, new_state} ->
-        Map.put(new_state, :active_panel, :tickets)
+        State.set_active_panel(new_state, :tickets)
 
       {:error, _} ->
         state

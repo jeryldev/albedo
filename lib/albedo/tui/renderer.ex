@@ -29,7 +29,9 @@ defmodule Albedo.TUI.Renderer do
     bg_cyan: "\e[46m",
     # Kanagawa colors (24-bit true color)
     kanagawa_orange: "\e[38;2;255;160;102m",
-    bg_kanagawa_sky_blue: "\e[48;2;127;180;202m"
+    bg_kanagawa_sky_blue: "\e[48;2;127;180;202m",
+    # Dimmer background for inactive panel selection
+    bg_inactive_selection: "\e[48;2;70;70;80m"
   }
 
   @doc """
@@ -584,14 +586,15 @@ defmodule Albedo.TUI.Renderer do
     project = Enum.at(state.projects, row)
 
     if project do
-      is_selected = row == state.current_project and state.active_panel == :projects
-      build_project_item(project, width, is_selected)
+      is_selected = row == state.current_project
+      is_active = state.active_panel == :projects
+      build_project_item(project, width, is_selected, is_active)
     else
       String.duplicate(" ", width)
     end
   end
 
-  defp build_project_item(project, width, is_selected) do
+  defp build_project_item(project, width, is_selected, _is_active) do
     bg = if is_selected, do: @colors.bg_kanagawa_sky_blue <> @colors.black, else: ""
     state_indicator = project_state_indicator(project.state)
     id = String.slice(project.id, 0, width - 4)
@@ -630,8 +633,10 @@ defmodule Albedo.TUI.Renderer do
       ticket = Enum.at(state.data.tickets, row)
 
       if ticket do
-        is_selected = row == state.selected_ticket and state.active_panel == :tickets
-        build_ticket_item(ticket, width, is_selected)
+        is_selected = row == state.selected_ticket
+        is_active = state.active_panel == :tickets
+        is_viewing = state.detail_content == :ticket
+        build_ticket_item(ticket, width, is_selected, is_active, is_viewing)
       else
         String.duplicate(" ", width)
       end
@@ -645,8 +650,9 @@ defmodule Albedo.TUI.Renderer do
     end
   end
 
-  defp build_ticket_item(ticket, width, is_selected) do
-    bg = if is_selected, do: @colors.bg_kanagawa_sky_blue <> @colors.black, else: ""
+  defp build_ticket_item(ticket, width, is_selected, is_active, is_viewing) do
+    show_highlight = is_selected and (is_active or is_viewing)
+    bg = if show_highlight, do: @colors.bg_kanagawa_sky_blue <> @colors.black, else: ""
     status_ind = status_indicator(ticket.status)
 
     points = if ticket.estimate, do: " [#{ticket.estimate}]", else: ""
@@ -689,8 +695,10 @@ defmodule Albedo.TUI.Renderer do
         String.duplicate(" ", width)
 
       file ->
-        is_selected = row == state.selected_file and state.active_panel == :research
-        build_research_item(file, width, is_selected)
+        is_selected = row == state.selected_file
+        is_active = state.active_panel == :research
+        is_viewing = state.detail_content == :research
+        build_research_item(file, width, is_selected, is_active, is_viewing)
     end
   end
 
@@ -703,8 +711,9 @@ defmodule Albedo.TUI.Renderer do
     String.duplicate(" ", width)
   end
 
-  defp build_research_item(file, width, is_selected) do
-    bg = if is_selected, do: @colors.bg_kanagawa_sky_blue <> @colors.black, else: ""
+  defp build_research_item(file, width, is_selected, is_active, is_viewing) do
+    show_highlight = is_selected and (is_active or is_viewing)
+    bg = if show_highlight, do: @colors.bg_kanagawa_sky_blue <> @colors.black, else: ""
     type_indicator = if file.type == :markdown, do: "md", else: "js"
     name = String.slice(file.name, 0, width - 5)
 
