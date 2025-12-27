@@ -3,7 +3,7 @@ defmodule Albedo.LLM.OpenAI do
   OpenAI API client.
   """
 
-  require Logger
+  alias Albedo.LLM.ResponseHandler
 
   @base_url "https://api.openai.com/v1"
   @default_model "gpt-4o"
@@ -35,7 +35,7 @@ defmodule Albedo.LLM.OpenAI do
 
     url
     |> Req.post(json: body, headers: headers, receive_timeout: 600_000, retry: false)
-    |> handle_response()
+    |> ResponseHandler.handle_response(&parse_response/1, "OpenAI")
   end
 
   defp build_body(prompt, opts) do
@@ -47,38 +47,9 @@ defmodule Albedo.LLM.OpenAI do
     }
   end
 
-  defp handle_response({:ok, %{status: 200, body: response_body}}),
-    do: parse_response(response_body)
+  defp parse_response(%{"choices" => [%{"message" => %{"content" => content}} | _]}),
+    do: {:ok, content}
 
-  defp handle_response({:ok, %{status: 429}}), do: {:error, :rate_limited}
-  defp handle_response({:ok, %{status: 401}}), do: {:error, :invalid_api_key}
-  defp handle_response({:ok, %{status: 403}}), do: {:error, :forbidden}
-
-  defp handle_response({:ok, %{status: 400, body: body}}) do
-    Logger.error("OpenAI bad request: #{inspect(body)}")
-    {:error, {:bad_request, body}}
-  end
-
-  defp handle_response({:ok, %{status: status, body: body}}) do
-    Logger.error("OpenAI error (#{status}): #{inspect(body)}")
-    {:error, {:http_error, status, body}}
-  end
-
-  defp handle_response({:error, reason}) do
-    Logger.error("OpenAI request failed: #{inspect(reason)}")
-    {:error, {:request_failed, reason}}
-  end
-
-  defp parse_response(body) do
-    case body do
-      %{"choices" => [%{"message" => %{"content" => content}} | _]} ->
-        {:ok, content}
-
-      %{"error" => error} ->
-        {:error, {:api_error, error}}
-
-      _ ->
-        {:error, {:unexpected_response, body}}
-    end
-  end
+  defp parse_response(%{"error" => error}), do: {:error, {:api_error, error}}
+  defp parse_response(body), do: {:error, {:unexpected_response, body}}
 end

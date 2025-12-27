@@ -806,7 +806,7 @@ defmodule Albedo.TUI do
       |> State.add_modal_log("")
 
     spawn_link(fn ->
-      Logger.configure(level: :none)
+      Logger.put_process_level(self(), :none)
 
       result =
         Project.start_greenfield(name, task,
@@ -835,7 +835,7 @@ defmodule Albedo.TUI do
       |> State.add_modal_log("")
 
     spawn_link(fn ->
-      Logger.configure(level: :none)
+      Logger.put_process_level(self(), :none)
 
       result =
         Project.start(path, task,

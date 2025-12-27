@@ -758,8 +758,6 @@ defmodule Albedo.LLM.Prompts do
     end
   end
 
-  defp format_tech_stack_context(_), do: "No tech stack information available"
-
   defp format_greenfield_context(context) when is_map(context) do
     if context[:greenfield] do
       parts = []

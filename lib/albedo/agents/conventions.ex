@@ -151,9 +151,6 @@ defmodule Albedo.Agents.Conventions do
         files
         |> Enum.take(@max_test_samples)
         |> Enum.map(&format_test_sample/1)
-
-      _ ->
-        []
     end
   end
 

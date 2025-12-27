@@ -69,7 +69,7 @@ defmodule Albedo.TUI.State do
 
   @type t :: %__MODULE__{
           project_dir: String.t() | nil,
-          data: Tickets.Data.t() | nil,
+          data: Tickets.tickets_data() | nil,
           projects: [map()],
           current_project: non_neg_integer(),
           selected_ticket: non_neg_integer() | nil,

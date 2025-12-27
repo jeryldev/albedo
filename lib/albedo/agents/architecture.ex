@@ -132,7 +132,6 @@ defmodule Albedo.Agents.Architecture do
     modules =
       case FileScanner.find_files(lib_path, "*.ex") do
         {:ok, files} -> Enum.map(files, &Path.basename(&1, ".ex"))
-        _ -> []
       end
 
     %{

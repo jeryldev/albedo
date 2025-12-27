@@ -3,7 +3,7 @@ defmodule Albedo.LLM.Gemini do
   Google Gemini API client.
   """
 
-  require Logger
+  alias Albedo.LLM.ResponseHandler
 
   @base_url "https://generativelanguage.googleapis.com/v1beta"
   @default_model "gemini-2.0-flash-exp"
@@ -35,7 +35,7 @@ defmodule Albedo.LLM.Gemini do
 
     url
     |> Req.post(json: body, receive_timeout: 600_000, retry: false)
-    |> handle_response()
+    |> ResponseHandler.handle_response(&parse_response/1, "Gemini")
   end
 
   defp build_body(prompt, opts) do
@@ -50,46 +50,18 @@ defmodule Albedo.LLM.Gemini do
     }
   end
 
-  defp handle_response({:ok, %{status: 200, body: response_body}}),
-    do: parse_response(response_body)
+  defp parse_response(%{"candidates" => [%{"content" => %{"parts" => parts}} | _]}) do
+    text =
+      parts
+      |> Enum.filter(&Map.has_key?(&1, "text"))
+      |> Enum.map_join("", & &1["text"])
 
-  defp handle_response({:ok, %{status: 429}}), do: {:error, :rate_limited}
-  defp handle_response({:ok, %{status: 401}}), do: {:error, :invalid_api_key}
-  defp handle_response({:ok, %{status: 403}}), do: {:error, :forbidden}
-
-  defp handle_response({:ok, %{status: 400, body: body}}) do
-    Logger.error("Gemini bad request: #{inspect(body)}")
-    {:error, {:bad_request, body}}
+    {:ok, text}
   end
 
-  defp handle_response({:ok, %{status: status, body: body}}) do
-    Logger.error("Gemini error (#{status}): #{inspect(body)}")
-    {:error, {:http_error, status, body}}
-  end
+  defp parse_response(%{"candidates" => [%{"finishReason" => "SAFETY"} | _]}),
+    do: {:error, :safety_blocked}
 
-  defp handle_response({:error, reason}) do
-    Logger.error("Gemini request failed: #{inspect(reason)}")
-    {:error, {:request_failed, reason}}
-  end
-
-  defp parse_response(body) do
-    case body do
-      %{"candidates" => [%{"content" => %{"parts" => parts}} | _]} ->
-        text =
-          parts
-          |> Enum.filter(&Map.has_key?(&1, "text"))
-          |> Enum.map_join("", & &1["text"])
-
-        {:ok, text}
-
-      %{"candidates" => [%{"finishReason" => "SAFETY"} | _]} ->
-        {:error, :safety_blocked}
-
-      %{"error" => error} ->
-        {:error, {:api_error, error}}
-
-      _ ->
-        {:error, {:unexpected_response, body}}
-    end
-  end
+  defp parse_response(%{"error" => error}), do: {:error, {:api_error, error}}
+  defp parse_response(body), do: {:error, {:unexpected_response, body}}
 end

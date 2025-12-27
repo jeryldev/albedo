@@ -3,7 +3,7 @@ defmodule Albedo.LLM.Claude do
   Anthropic Claude API client.
   """
 
-  require Logger
+  alias Albedo.LLM.ResponseHandler
 
   @base_url "https://api.anthropic.com/v1"
   @default_model "claude-sonnet-4-20250514"
@@ -36,7 +36,7 @@ defmodule Albedo.LLM.Claude do
 
     url
     |> Req.post(json: body, headers: headers, receive_timeout: 600_000, retry: false)
-    |> handle_response()
+    |> ResponseHandler.handle_response(&parse_response/1, "Claude")
   end
 
   defp build_headers(api_key) do
@@ -56,44 +56,15 @@ defmodule Albedo.LLM.Claude do
     }
   end
 
-  defp handle_response({:ok, %{status: 200, body: response_body}}),
-    do: parse_response(response_body)
+  defp parse_response(%{"content" => content}) when is_list(content) do
+    text =
+      content
+      |> Enum.filter(&(&1["type"] == "text"))
+      |> Enum.map_join("", & &1["text"])
 
-  defp handle_response({:ok, %{status: 429}}), do: {:error, :rate_limited}
-  defp handle_response({:ok, %{status: 401}}), do: {:error, :invalid_api_key}
-  defp handle_response({:ok, %{status: 403}}), do: {:error, :forbidden}
-  defp handle_response({:ok, %{status: 529}}), do: {:error, :overloaded}
-
-  defp handle_response({:ok, %{status: 400, body: body}}) do
-    Logger.error("Claude bad request: #{inspect(body)}")
-    {:error, {:bad_request, body}}
+    {:ok, text}
   end
 
-  defp handle_response({:ok, %{status: status, body: body}}) do
-    Logger.error("Claude error (#{status}): #{inspect(body)}")
-    {:error, {:http_error, status, body}}
-  end
-
-  defp handle_response({:error, reason}) do
-    Logger.error("Claude request failed: #{inspect(reason)}")
-    {:error, {:request_failed, reason}}
-  end
-
-  defp parse_response(body) do
-    case body do
-      %{"content" => content} when is_list(content) ->
-        text =
-          content
-          |> Enum.filter(&(&1["type"] == "text"))
-          |> Enum.map_join("", & &1["text"])
-
-        {:ok, text}
-
-      %{"error" => error} ->
-        {:error, {:api_error, error}}
-
-      _ ->
-        {:error, {:unexpected_response, body}}
-    end
-  end
+  defp parse_response(%{"error" => error}), do: {:error, {:api_error, error}}
+  defp parse_response(body), do: {:error, {:unexpected_response, body}}
 end

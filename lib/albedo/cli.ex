@@ -18,6 +18,7 @@ defmodule Albedo.CLI do
     |> run()
   end
 
+  @spec halt_with_error(non_neg_integer()) :: no_return()
   defp halt_with_error(code) do
     if Application.get_env(:albedo, :test_mode, false) do
       throw({:cli_halt, code})
@@ -858,10 +859,6 @@ defmodule Albedo.CLI do
       :ok ->
         :ok
 
-      {:error, :unsupported_platform} ->
-        print_error("TUI is not supported on this platform")
-        halt_with_error(1)
-
       {:error, :not_a_tty} ->
         print_error("TUI requires a terminal (TTY)")
         IO.puts("")
@@ -869,10 +866,6 @@ defmodule Albedo.CLI do
         IO.puts("")
         IO.puts("  albedo-tui")
         IO.puts("")
-        halt_with_error(1)
-
-      {:error, reason} ->
-        print_error("TUI failed: #{inspect(reason)}")
         halt_with_error(1)
     end
   end
