@@ -552,11 +552,11 @@ defmodule Albedo.TUI do
     end
   end
 
-  defp handle_delete_ticket(%State{data: nil} = state) do
+  defp execute_delete_ticket(%State{data: nil} = state) do
     State.set_message(state, "No project loaded")
   end
 
-  defp handle_delete_ticket(%State{data: data, project_dir: project_dir} = state) do
+  defp execute_delete_ticket(%State{data: data, project_dir: project_dir} = state) do
     with ticket when not is_nil(ticket) <- State.current_ticket(state),
          {:ok, updated_data, _deleted} <- Tickets.delete(data, ticket.id),
          :ok <- Tickets.save(project_dir, updated_data) do
@@ -655,6 +655,12 @@ defmodule Albedo.TUI do
     delete_project(state, projects_dir)
   end
 
+  defp execute_confirmed_action(%State{confirm_action: :delete_ticket} = state, _projects_dir) do
+    state
+    |> State.exit_confirm_mode()
+    |> execute_delete_ticket()
+  end
+
   defp execute_confirmed_action(state, _projects_dir) do
     State.exit_confirm_mode(state)
   end
@@ -727,7 +733,17 @@ defmodule Albedo.TUI do
   end
 
   defp handle_delete(%State{active_panel: panel} = state) when panel in [:tickets, :detail] do
-    handle_delete_ticket(state)
+    case State.current_ticket(state) do
+      nil ->
+        State.set_message(state, "No ticket selected")
+
+      ticket ->
+        State.enter_confirm_mode(
+          state,
+          :delete_ticket,
+          "Delete ticket ##{ticket.id} '#{String.slice(ticket.title, 0, 30)}'? (y/n)"
+        )
+    end
   end
 
   defp handle_delete(state), do: state
