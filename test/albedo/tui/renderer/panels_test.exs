@@ -153,4 +153,19 @@ defmodule Albedo.TUI.Renderer.PanelsTest do
       assert String.contains?(tickets_row, "Tickets")
     end
   end
+
+  describe "nil title handling" do
+    test "renders ticket with nil title as (untitled)" do
+      ticket = %{id: "1", title: nil, status: :pending, estimate: nil}
+      data = %{tickets: [ticket]}
+      state = build_state(data: data, active_panel: :tickets, selected_ticket: 0)
+
+      all_content =
+        Enum.map_join(12..19, "\n", fn row ->
+          Panels.build_left_panel_char(row, state, 40, 10, 30)
+        end)
+
+      assert String.contains?(all_content, "(untitled)")
+    end
+  end
 end

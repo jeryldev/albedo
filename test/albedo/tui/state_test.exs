@@ -255,6 +255,19 @@ defmodule Albedo.TUI.StateTest do
       assert result.edit_field == nil
     end
 
+    test "enter_edit_mode handles nil title gracefully" do
+      ticket = %{build_ticket("1") | title: nil}
+      data = build_tickets_data([ticket])
+      state = %State{State.new() | data: data, selected_ticket: 0}
+
+      result = State.enter_edit_mode(state)
+
+      assert result.mode == :edit
+      assert result.edit_field == :title
+      assert result.edit_buffer == ""
+      assert result.edit_cursor == 0
+    end
+
     test "exit_edit_mode resets edit state" do
       state = %State{
         State.new()

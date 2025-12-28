@@ -18,12 +18,14 @@ defmodule Albedo.TUI.State.Editing do
         state
 
       ticket ->
+        title = ticket.title || ""
+
         %{
           state
           | mode: :edit,
             edit_field: :title,
-            edit_buffer: ticket.title,
-            edit_cursor: String.length(ticket.title)
+            edit_buffer: title,
+            edit_cursor: String.length(title)
         }
     end
   end

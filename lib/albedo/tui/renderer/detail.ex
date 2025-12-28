@@ -386,7 +386,8 @@ defmodule Albedo.TUI.Renderer.Detail do
   end
 
   defp add_header_lines(lines, ticket) do
-    lines ++ [{:header, "##{ticket.id}: #{ticket.title}"}, {:blank}]
+    title = ticket.title || "(untitled)"
+    lines ++ [{:header, "##{ticket.id}: #{title}"}, {:blank}]
   end
 
   defp add_metadata_lines(lines, ticket) do

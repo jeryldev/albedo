@@ -495,16 +495,17 @@ defmodule Albedo.TUI do
   end
 
   defp handle_add_ticket(%State{data: data, project_dir: project_dir} = state) do
-    attrs = %{title: "New ticket", type: :feature, priority: :medium}
+    attrs = %{title: "", type: :feature, priority: :medium}
 
     case Tickets.add(data, attrs) do
-      {:ok, updated_data, ticket} ->
+      {:ok, updated_data, _ticket} ->
         case Tickets.save(project_dir, updated_data) do
           :ok ->
             new_idx = length(updated_data.tickets) - 1
 
-            %{state | data: updated_data, selected_ticket: new_idx}
-            |> State.set_message("Added ticket ##{ticket.id}. Edit with 'e' to change details.")
+            %{state | data: updated_data, selected_ticket: new_idx, viewed_ticket: new_idx}
+            |> State.set_active_panel(:detail)
+            |> State.enter_edit_mode()
 
           {:error, reason} ->
             State.set_message(state, "Failed to save ticket: #{inspect(reason)}")
@@ -750,10 +751,12 @@ defmodule Albedo.TUI do
         State.set_message(state, "No ticket selected")
 
       ticket ->
+        title = String.slice(ticket.title || "(untitled)", 0, 30)
+
         State.enter_confirm_mode(
           state,
           :delete_ticket,
-          "Delete ticket ##{ticket.id} '#{String.slice(ticket.title, 0, 30)}'? (y/n)"
+          "Delete ticket ##{ticket.id} '#{title}'? (y/n)"
         )
     end
   end

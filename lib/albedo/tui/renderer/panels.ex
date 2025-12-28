@@ -132,7 +132,8 @@ defmodule Albedo.TUI.Renderer.Panels do
     points_len = String.length(points)
     prefix_len = 3
     title_width = max(0, width - prefix_len - points_len)
-    title = String.pad_trailing(String.slice(ticket.title, 0, title_width), title_width)
+    ticket_title = ticket.title || "(untitled)"
+    title = String.pad_trailing(String.slice(ticket_title, 0, title_width), title_width)
 
     bg <> " " <> status_ind <> " " <> title <> points <> colors.reset
   end
