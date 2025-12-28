@@ -10,7 +10,10 @@ defmodule Albedo.TUI.Renderer.PanelsTest do
       current_project: opts[:current_project] || 0,
       data: opts[:data],
       selected_ticket: opts[:selected_ticket] || 0,
-      selected_research: opts[:selected_research] || 0
+      selected_file: opts[:selected_file] || 0,
+      research_files: opts[:research_files] || [],
+      detail_content: opts[:detail_content] || :ticket,
+      panel_scroll: %{projects: 0, tickets: 0, research: 0}
     }
   end
 

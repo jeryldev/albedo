@@ -51,10 +51,12 @@ defmodule Albedo.TUI.Renderer.Panels do
   end
 
   defp build_project_content(row, state, width) do
-    project = Enum.at(state.projects, row)
+    scroll = state.panel_scroll.projects
+    item_idx = row + scroll
+    project = Enum.at(state.projects, item_idx)
 
     if project do
-      is_selected = row == state.current_project
+      is_selected = item_idx == state.current_project
       is_active = state.active_panel == :projects
       build_project_item(project, width, is_selected, is_active)
     else
@@ -98,10 +100,12 @@ defmodule Albedo.TUI.Renderer.Panels do
     colors = Utils.colors()
 
     if state.data do
-      ticket = Enum.at(state.data.tickets, row)
+      scroll = state.panel_scroll.tickets
+      item_idx = row + scroll
+      ticket = Enum.at(state.data.tickets, item_idx)
 
       if ticket do
-        is_selected = row == state.selected_ticket
+        is_selected = item_idx == state.selected_ticket
         is_active = state.active_panel == :tickets
         is_viewing = state.detail_content == :ticket
         build_ticket_item(ticket, width, is_selected, is_active, is_viewing)
@@ -161,12 +165,15 @@ defmodule Albedo.TUI.Renderer.Panels do
   end
 
   defp build_research_content(row, state, width) do
-    case Enum.at(state.research_files, row) do
+    scroll = state.panel_scroll.research
+    item_idx = row + scroll
+
+    case Enum.at(state.research_files, item_idx) do
       nil ->
         String.duplicate(" ", width)
 
       file ->
-        is_selected = row == state.selected_file
+        is_selected = item_idx == state.selected_file
         is_active = state.active_panel == :research
         is_viewing = state.detail_content == :research
         build_research_item(file, width, is_selected, is_active, is_viewing)

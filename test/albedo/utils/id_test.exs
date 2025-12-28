@@ -104,6 +104,49 @@ defmodule Albedo.Utils.IdTest do
     end
   end
 
+  describe "generate_unique_project_id/2" do
+    test "slugifies the name" do
+      assert Id.generate_unique_project_id("My Project", []) == "my-project"
+    end
+
+    test "replaces spaces with hyphens" do
+      assert Id.generate_unique_project_id("Hello World Test", []) == "hello-world-test"
+    end
+
+    test "returns base name when no duplicates exist" do
+      existing = ["other-project", "another-one"]
+      assert Id.generate_unique_project_id("My Project", existing) == "my-project"
+    end
+
+    test "appends -1 when duplicate exists" do
+      existing = ["my-project"]
+      assert Id.generate_unique_project_id("My Project", existing) == "my-project-1"
+    end
+
+    test "appends -2 when -1 also exists" do
+      existing = ["my-project", "my-project-1"]
+      assert Id.generate_unique_project_id("My Project", existing) == "my-project-2"
+    end
+
+    test "finds next available number in sequence" do
+      existing = ["my-project", "my-project-1", "my-project-2", "my-project-3"]
+      assert Id.generate_unique_project_id("My Project", existing) == "my-project-4"
+    end
+
+    test "handles gaps in sequence" do
+      existing = ["my-project", "my-project-2", "my-project-5"]
+      assert Id.generate_unique_project_id("My Project", existing) == "my-project-1"
+    end
+
+    test "handles special characters in name" do
+      assert Id.generate_unique_project_id("Test! Project @#$", []) == "test-project"
+    end
+
+    test "handles empty existing list" do
+      assert Id.generate_unique_project_id("New Project", []) == "new-project"
+    end
+  end
+
   describe "slugify/1" do
     test "converts to lowercase" do
       assert Id.slugify("Hello World") == "hello-world"

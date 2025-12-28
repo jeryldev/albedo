@@ -622,11 +622,21 @@ defmodule Albedo.TUI.StateTest do
       assert hd(result.projects).id == "with-project"
     end
 
-    test "sorts projects in descending order", %{projects_dir: projects_dir} do
-      for name <- ["aaa-project", "zzz-project", "mmm-project"] do
+    test "sorts projects by created_at descending (newest first)", %{projects_dir: projects_dir} do
+      now = DateTime.utc_now()
+
+      projects_data = [
+        {"old-project", DateTime.add(now, -3600, :second)},
+        {"new-project", now},
+        {"mid-project", DateTime.add(now, -1800, :second)}
+      ]
+
+      for {name, created_at} <- projects_data do
         dir = Path.join(projects_dir, name)
         File.mkdir_p!(dir)
-        File.write!(Path.join(dir, "project.json"), "{}")
+
+        data = %{"created_at" => DateTime.to_iso8601(created_at)}
+        File.write!(Path.join(dir, "project.json"), Jason.encode!(data))
       end
 
       state = State.new()
@@ -634,7 +644,7 @@ defmodule Albedo.TUI.StateTest do
       result = State.load_projects(state, projects_dir)
 
       ids = Enum.map(result.projects, & &1.id)
-      assert ids == ["zzz-project", "mmm-project", "aaa-project"]
+      assert ids == ["new-project", "mid-project", "old-project"]
     end
 
     test "truncates task to 50 characters", %{projects_dir: projects_dir} do
@@ -689,6 +699,140 @@ defmodule Albedo.TUI.StateTest do
       result = State.load_tickets(state, project_dir)
 
       assert {:error, _reason} = result
+    end
+  end
+
+  describe "load_project_without_tickets/2" do
+    setup do
+      test_dir = Path.join(System.tmp_dir!(), "albedo_test_#{System.unique_integer([:positive])}")
+      File.mkdir_p!(test_dir)
+
+      on_exit(fn -> File.rm_rf!(test_dir) end)
+
+      {:ok, project_dir: test_dir}
+    end
+
+    test "creates empty data structure for project", %{project_dir: project_dir} do
+      project_id = Path.basename(project_dir)
+      projects = [%{id: project_id, task: "Test task"}]
+      state = %State{State.new() | projects: projects}
+
+      result = State.load_project_without_tickets(state, project_dir)
+
+      assert result.project_dir == project_dir
+      assert result.data != nil
+      assert result.data.tickets == []
+      assert result.data.project_id == project_id
+      assert result.data.task_description == "Test task"
+    end
+
+    test "resets selection state", %{project_dir: project_dir} do
+      state = %State{
+        State.new()
+        | selected_ticket: 5,
+          viewed_ticket: 3,
+          selected_file: 2,
+          viewed_file: 1,
+          detail_scroll: 10
+      }
+
+      result = State.load_project_without_tickets(state, project_dir)
+
+      assert result.selected_ticket == nil
+      assert result.viewed_ticket == nil
+      assert result.selected_file == nil
+      assert result.viewed_file == nil
+      assert result.detail_scroll == 0
+    end
+
+    test "loads research files from project directory", %{project_dir: project_dir} do
+      File.write!(Path.join(project_dir, "research.md"), "# Research")
+      File.write!(Path.join(project_dir, "notes.json"), "{}")
+      File.write!(Path.join(project_dir, "other.txt"), "ignored")
+
+      state = State.new()
+
+      result = State.load_project_without_tickets(state, project_dir)
+
+      assert length(result.research_files) == 2
+      names = Enum.map(result.research_files, & &1.name)
+      assert "research.md" in names
+      assert "notes.json" in names
+    end
+  end
+
+  describe "panel scroll adjustment" do
+    test "move_down adjusts scroll when selection exceeds visible area" do
+      projects = for i <- 1..20, do: %{id: "project-#{i}"}
+
+      state = %State{
+        State.new()
+        | projects: projects,
+          current_project: 5,
+          active_panel: :projects,
+          terminal_size: {120, 30},
+          panel_scroll: %{projects: 0, tickets: 0, research: 0}
+      }
+
+      result = State.move_down(state)
+
+      assert result.current_project == 6
+      assert result.panel_scroll.projects >= 0
+    end
+
+    test "move_up adjusts scroll when selection goes above visible area" do
+      projects = for i <- 1..20, do: %{id: "project-#{i}"}
+
+      state = %State{
+        State.new()
+        | projects: projects,
+          current_project: 1,
+          active_panel: :projects,
+          terminal_size: {120, 30},
+          panel_scroll: %{projects: 5, tickets: 0, research: 0}
+      }
+
+      result = State.move_up(state)
+
+      assert result.current_project == 0
+      assert result.panel_scroll.projects == 0
+    end
+
+    test "scroll adjusts for tickets panel" do
+      tickets = for i <- 1..20, do: build_ticket("#{i}")
+      data = build_tickets_data(tickets)
+
+      state = %State{
+        State.new()
+        | data: data,
+          selected_ticket: 5,
+          active_panel: :tickets,
+          terminal_size: {120, 30},
+          panel_scroll: %{projects: 0, tickets: 0, research: 0}
+      }
+
+      result = State.move_down(state)
+
+      assert result.selected_ticket == 6
+      assert result.panel_scroll.tickets >= 0
+    end
+
+    test "scroll adjusts for research panel" do
+      files = for i <- 1..20, do: %{name: "file-#{i}.md", path: "/file-#{i}.md", type: :markdown}
+
+      state = %State{
+        State.new()
+        | research_files: files,
+          selected_file: 5,
+          active_panel: :research,
+          terminal_size: {120, 30},
+          panel_scroll: %{projects: 0, tickets: 0, research: 0}
+      }
+
+      result = State.move_down(state)
+
+      assert result.selected_file == 6
+      assert result.panel_scroll.research >= 0
     end
   end
 

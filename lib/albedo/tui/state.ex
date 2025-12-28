@@ -154,12 +154,11 @@ defmodule Albedo.TUI.State do
           dirs
           |> Enum.reject(&String.starts_with?(&1, "."))
           |> Enum.filter(&has_project_file?(projects_dir, &1))
-          |> Enum.sort(:desc)
+          |> Enum.map(&load_project_info(projects_dir, &1))
+          |> Enum.sort_by(& &1.created_at, {:desc, DateTime})
           |> Enum.take(50)
           |> Enum.with_index()
-          |> Enum.map(fn {dir, idx} ->
-            load_project_info(projects_dir, dir, idx)
-          end)
+          |> Enum.map(fn {project, idx} -> %{project | index: idx} end)
 
         {:error, reason} ->
           Logger.warning("Failed to list projects directory: #{inspect(reason)}")
@@ -179,20 +178,33 @@ defmodule Albedo.TUI.State do
     end
   end
 
-  defp load_project_info(projects_dir, id, index) do
+  defp load_project_info(projects_dir, id) do
     project_file = Path.join([projects_dir, id, "project.json"])
-    base = %{id: id, index: index, state: "unknown", task: ""}
+    fallback_time = DateTime.from_unix!(0)
+    base = %{id: id, index: 0, state: "unknown", task: "", created_at: fallback_time}
 
     with true <- File.exists?(project_file),
          {:ok, content} <- File.read(project_file),
          {:ok, data} <- Jason.decode(content) do
+      created_at = parse_project_datetime(data["created_at"]) || fallback_time
+
       %{
         base
         | state: data["state"] || "unknown",
-          task: String.slice(data["task"] || "", 0, 50)
+          task: String.slice(data["task"] || "", 0, 50),
+          created_at: created_at
       }
     else
       _ -> base
+    end
+  end
+
+  defp parse_project_datetime(nil), do: nil
+
+  defp parse_project_datetime(str) when is_binary(str) do
+    case DateTime.from_iso8601(str) do
+      {:ok, dt, _} -> dt
+      _ -> nil
     end
   end
 
@@ -217,6 +229,26 @@ defmodule Albedo.TUI.State do
       {:error, reason} ->
         {:error, reason}
     end
+  end
+
+  def load_project_without_tickets(%__MODULE__{} = state, project_dir) do
+    files = load_research_files(project_dir)
+    project_id = Path.basename(project_dir)
+    project = Enum.find(state.projects, &(&1.id == project_id))
+    task = if project, do: project.task, else: ""
+    empty_data = Tickets.new(project_id, task, [])
+
+    %{
+      state
+      | data: empty_data,
+        project_dir: project_dir,
+        selected_ticket: nil,
+        viewed_ticket: nil,
+        selected_file: nil,
+        viewed_file: nil,
+        research_files: files,
+        detail_scroll: 0
+    }
   end
 
   defp load_research_files(project_dir) do
@@ -284,7 +316,9 @@ defmodule Albedo.TUI.State do
 
   def move_up(%__MODULE__{active_panel: :projects} = state) do
     new_idx = max(0, state.current_project - 1)
+
     %{state | current_project: new_idx}
+    |> adjust_panel_scroll(:projects, new_idx)
   end
 
   def move_up(%__MODULE__{active_panel: :tickets, data: nil} = state), do: state
@@ -295,7 +329,9 @@ defmodule Albedo.TUI.State do
 
   def move_up(%__MODULE__{active_panel: :tickets} = state) do
     new_idx = max(0, state.selected_ticket - 1)
+
     %{state | selected_ticket: new_idx}
+    |> adjust_panel_scroll(:tickets, new_idx)
   end
 
   def move_up(%__MODULE__{active_panel: :research, research_files: []} = state), do: state
@@ -303,7 +339,9 @@ defmodule Albedo.TUI.State do
 
   def move_up(%__MODULE__{active_panel: :research} = state) do
     new_idx = max(0, state.selected_file - 1)
+
     %{state | selected_file: new_idx, detail_scroll: 0}
+    |> adjust_panel_scroll(:research, new_idx)
   end
 
   def move_up(%__MODULE__{active_panel: :detail} = state) do
@@ -314,7 +352,9 @@ defmodule Albedo.TUI.State do
   def move_down(%__MODULE__{active_panel: :projects, projects: projects} = state) do
     max_idx = max(0, length(projects) - 1)
     new_idx = min(max_idx, state.current_project + 1)
+
     %{state | current_project: new_idx}
+    |> adjust_panel_scroll(:projects, new_idx)
   end
 
   def move_down(%__MODULE__{active_panel: :tickets, data: nil} = state), do: state
@@ -326,7 +366,9 @@ defmodule Albedo.TUI.State do
   def move_down(%__MODULE__{active_panel: :tickets, data: data} = state) do
     max_idx = max(0, length(data.tickets) - 1)
     new_idx = min(max_idx, state.selected_ticket + 1)
+
     %{state | selected_ticket: new_idx}
+    |> adjust_panel_scroll(:tickets, new_idx)
   end
 
   def move_down(%__MODULE__{active_panel: :research, research_files: []} = state), do: state
@@ -340,7 +382,9 @@ defmodule Albedo.TUI.State do
   def move_down(%__MODULE__{active_panel: :research, research_files: files} = state) do
     max_idx = max(0, length(files) - 1)
     new_idx = min(max_idx, state.selected_file + 1)
+
     %{state | selected_file: new_idx, detail_scroll: 0}
+    |> adjust_panel_scroll(:research, new_idx)
   end
 
   def move_down(%__MODULE__{active_panel: :detail} = state) do
@@ -535,4 +579,27 @@ defmodule Albedo.TUI.State do
   def exit_modal(state), do: Modal.exit(state)
   def scroll_modal_up(state), do: Modal.scroll_up(state)
   def scroll_modal_down(state), do: Modal.scroll_down(state)
+
+  defp adjust_panel_scroll(%{terminal_size: {_width, height}} = state, panel, selected_idx) do
+    panel_height = height - 2
+    section_height = div(panel_height, 3)
+    visible_rows = section_height - 2
+
+    current_scroll = Map.get(state.panel_scroll, panel, 0)
+
+    new_scroll =
+      cond do
+        selected_idx < current_scroll ->
+          selected_idx
+
+        selected_idx >= current_scroll + visible_rows ->
+          selected_idx - visible_rows + 1
+
+        true ->
+          current_scroll
+      end
+
+    updated_scroll = Map.put(state.panel_scroll, panel, max(0, new_scroll))
+    %{state | panel_scroll: updated_scroll}
+  end
 end

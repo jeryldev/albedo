@@ -37,6 +37,47 @@ defmodule Albedo.Utils.Id do
   end
 
   @doc """
+  Generates a unique project ID from a name, checking for duplicates.
+
+  The name is slugified (spaces become hyphens, lowercase).
+  If a duplicate exists, appends -1, -2, etc.
+
+  ## Examples
+
+      iex> Albedo.Utils.Id.generate_unique_project_id("My Project", [])
+      "my-project"
+
+      iex> Albedo.Utils.Id.generate_unique_project_id("My Project", ["my-project"])
+      "my-project-1"
+
+      iex> Albedo.Utils.Id.generate_unique_project_id("My Project", ["my-project", "my-project-1"])
+      "my-project-2"
+  """
+  def generate_unique_project_id(name, existing_ids)
+      when is_binary(name) and is_list(existing_ids) do
+    base_id = slugify(name)
+    find_unique_id(base_id, existing_ids)
+  end
+
+  defp find_unique_id(base_id, existing_ids) do
+    if base_id in existing_ids do
+      find_unique_id_with_suffix(base_id, existing_ids, 1)
+    else
+      base_id
+    end
+  end
+
+  defp find_unique_id_with_suffix(base_id, existing_ids, n) do
+    candidate = "#{base_id}-#{n}"
+
+    if candidate in existing_ids do
+      find_unique_id_with_suffix(base_id, existing_ids, n + 1)
+    else
+      candidate
+    end
+  end
+
+  @doc """
   Computes the next ticket ID from a list of tickets.
 
   Finds the maximum numeric ID and returns the next integer as a string.

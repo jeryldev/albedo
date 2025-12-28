@@ -8,6 +8,7 @@ defmodule Albedo.TUI do
 
   alias Albedo.{Config, Project, Tickets}
   alias Albedo.TUI.{LogHandler, Renderer, State, Terminal}
+  alias Albedo.Utils.Id
 
   @doc """
   Starts the TUI application.
@@ -362,11 +363,15 @@ defmodule Albedo.TUI do
         case State.load_tickets(state, project_path) do
           {:ok, new_state} ->
             new_state
-            |> State.set_message("Loaded #{length(new_state.data.tickets)} tickets")
             |> State.set_active_panel(:tickets)
+            |> auto_view_first_ticket()
+            |> State.set_message("Loaded #{length(new_state.data.tickets)} tickets")
 
           {:error, :not_found} ->
-            State.set_message(state, "No tickets.json found")
+            state
+            |> State.load_project_without_tickets(project_path)
+            |> State.set_active_panel(:tickets)
+            |> State.set_message("No tickets yet. Press 'c' to add a ticket.")
 
           {:error, reason} ->
             State.set_message(state, "Error: #{inspect(reason)}")
@@ -399,6 +404,13 @@ defmodule Albedo.TUI do
   end
 
   defp handle_enter(state, _projects_dir), do: state
+
+  defp auto_view_first_ticket(%{data: %{tickets: [_ | _]}, selected_ticket: idx} = state)
+       when is_integer(idx) do
+    State.view_current_ticket(state)
+  end
+
+  defp auto_view_first_ticket(state), do: state
 
   defp handle_start(%State{data: nil} = state) do
     State.set_message(state, "No project loaded")
@@ -749,15 +761,21 @@ defmodule Albedo.TUI do
   defp handle_delete(state), do: state
 
   defp create_new_project(state, task, projects_dir) do
-    project_state = Project.State.new(".", task)
+    existing_ids = Enum.map(state.projects, & &1.id)
+    unique_id = Id.generate_unique_project_id(task, existing_ids)
+    project_state = Project.State.new(".", task, project: unique_id)
 
     case Project.State.save(project_state) do
       :ok ->
+        project_path = project_state.project_dir
+
         state
         |> State.exit_input_mode()
         |> State.load_projects(projects_dir)
         |> Map.put(:current_project, 0)
-        |> State.set_message("Created project: #{project_state.id}")
+        |> State.load_project_without_tickets(project_path)
+        |> State.set_active_panel(:tickets)
+        |> State.set_message("Created project: #{project_state.id}. Press 'c' to add tickets.")
 
       {:error, reason} ->
         state
@@ -952,7 +970,9 @@ defmodule Albedo.TUI do
   defp load_created_project(state, output_dir) do
     case State.load_tickets(state, output_dir) do
       {:ok, new_state} ->
-        State.set_active_panel(new_state, :tickets)
+        new_state
+        |> State.set_active_panel(:tickets)
+        |> auto_view_first_ticket()
 
       {:error, _} ->
         state
