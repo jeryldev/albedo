@@ -6,6 +6,19 @@ defmodule Albedo.CLI do
 
   alias Albedo.CLI.{Commands, Output}
 
+  @cmd_help "help"
+  @cmd_init "init"
+  @cmd_analyze "analyze"
+  @cmd_resume "resume"
+  @cmd_projects "projects"
+  @cmd_show "show"
+  @cmd_replan "replan"
+  @cmd_plan "plan"
+  @cmd_config "config"
+  @cmd_path "path"
+  @cmd_tickets "tickets"
+  @cmd_tui "tui"
+
   @doc """
   Main entry point for the CLI.
   """
@@ -88,79 +101,79 @@ defmodule Albedo.CLI do
     Output.print_help()
   end
 
-  defp run_command(["help" | _], _opts) do
+  defp run_command([@cmd_help | _], _opts) do
     Output.print_help()
   end
 
-  defp run_command(["init" | _], _opts) do
+  defp run_command([@cmd_init | _], _opts) do
     Commands.Analysis.init()
   end
 
-  defp run_command(["analyze"], _opts) do
+  defp run_command([@cmd_analyze], _opts) do
     Output.print_error("Missing codebase path")
-    IO.puts("Usage: albedo analyze /path/to/codebase --task \"Description of what to build\"")
+    IO.puts("Usage: albedo #{@cmd_analyze} /path/to/codebase --task \"Description of what to build\"")
     halt_with_error(1)
   end
 
-  defp run_command(["analyze", path | _], opts) do
+  defp run_command([@cmd_analyze, path | _], opts) do
     Commands.Analysis.analyze(path, opts)
   end
 
-  defp run_command(["resume"], _opts) do
+  defp run_command([@cmd_resume], _opts) do
     Output.print_error("Missing project path")
-    IO.puts("Usage: albedo resume /path/to/project")
-    IO.puts("   or: albedo resume ~/.albedo/projects/<project_id>")
+    IO.puts("Usage: albedo #{@cmd_resume} /path/to/project")
+    IO.puts("   or: albedo #{@cmd_resume} ~/.albedo/projects/<project_id>")
     halt_with_error(1)
   end
 
-  defp run_command(["resume", project_path | _], _opts) do
+  defp run_command([@cmd_resume, project_path | _], _opts) do
     Commands.Analysis.resume(project_path)
   end
 
-  defp run_command(["projects" | subcommand], opts) do
+  defp run_command([@cmd_projects | subcommand], opts) do
     Commands.Projects.dispatch(subcommand, opts)
   end
 
-  defp run_command(["show"], _opts) do
+  defp run_command([@cmd_show], _opts) do
     Output.print_error("Missing project ID")
-    IO.puts("Usage: albedo show <project_id>")
+    IO.puts("Usage: albedo #{@cmd_show} <project_id>")
     halt_with_error(1)
   end
 
-  defp run_command(["show", project_id | _], _opts) do
+  defp run_command([@cmd_show, project_id | _], _opts) do
     Commands.Misc.show(project_id)
   end
 
-  defp run_command(["replan"], _opts) do
+  defp run_command([@cmd_replan], _opts) do
     Output.print_error("Missing project path")
-    IO.puts("Usage: albedo replan /path/to/project --task \"New task description\"")
+    IO.puts("Usage: albedo #{@cmd_replan} /path/to/project --task \"New task description\"")
     halt_with_error(1)
   end
 
-  defp run_command(["replan", project_path | _], opts) do
+  defp run_command([@cmd_replan, project_path | _], opts) do
     Commands.Analysis.replan(project_path, opts)
   end
 
-  defp run_command(["plan" | _], opts) do
+  defp run_command([@cmd_plan | _], opts) do
     Commands.Analysis.plan(opts)
   end
 
-  defp run_command(["config" | subcommand], _opts) do
+  defp run_command([@cmd_config | subcommand], _opts) do
     Commands.Config.dispatch(subcommand)
   end
 
-  defp run_command(["path", project_id | _], _opts) do
+  defp run_command([@cmd_path, project_id | _], _opts) do
     Commands.Misc.path(project_id)
   end
 
-  defp run_command(["path"], _opts) do
+  defp run_command([@cmd_path], _opts) do
     Output.print_error("Missing project ID")
-    Output.print_info("Usage: albedo path <project_id>")
-    Output.print_info("Then:  cd $(albedo path <project_id>)")
+    Output.print_info("Usage: albedo #{@cmd_path} <project_id>")
+    Output.print_info("Then:  cd $(albedo #{@cmd_path} <project_id>)")
     halt_with_error(1)
   end
 
-  defp run_command(["tickets" | subcommand], opts) do
+  defp run_command([@cmd_tickets | subcommand], opts) do
     {extra_opts, remaining, _} =
       OptionParser.parse(subcommand,
         strict: [
@@ -193,7 +206,7 @@ defmodule Albedo.CLI do
     Commands.Tickets.dispatch(remaining, merged_opts)
   end
 
-  defp run_command(["tui" | _], _opts) do
+  defp run_command([@cmd_tui | _], _opts) do
     Commands.Misc.tui()
   end
 
