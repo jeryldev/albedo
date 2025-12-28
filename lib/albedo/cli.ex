@@ -61,20 +61,8 @@ defmodule Albedo.CLI do
           description: :string,
           type: :string,
           labels: :string,
-          yes: :boolean
-        ],
-        aliases: [
-          h: :help,
-          v: :version,
-          t: :task,
-          i: :interactive,
-          n: :name,
-          P: :project,
-          f: :format,
-          o: :output,
-          p: :priority,
-          d: :description,
-          y: :yes
+          yes: :boolean,
+          verbose: :boolean
         ]
       )
 
@@ -111,7 +99,11 @@ defmodule Albedo.CLI do
 
   defp run_command([@cmd_analyze], _opts) do
     Output.print_error("Missing codebase path")
-    IO.puts("Usage: albedo #{@cmd_analyze} /path/to/codebase --task \"Description of what to build\"")
+
+    IO.puts(
+      "Usage: albedo #{@cmd_analyze} /path/to/codebase --task \"Description of what to build\""
+    )
+
     halt_with_error(1)
   end
 
@@ -190,15 +182,6 @@ defmodule Albedo.CLI do
           type: :string,
           labels: :string,
           yes: :boolean
-        ],
-        aliases: [
-          P: :project,
-          f: :format,
-          o: :output,
-          p: :priority,
-          t: :title,
-          d: :description,
-          y: :yes
         ]
       )
 

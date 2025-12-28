@@ -8,6 +8,7 @@ defmodule Albedo.CLI.Commands.Tickets do
   alias Albedo.{Config, Tickets}
   alias Albedo.Tickets.Exporter
 
+  @spec dispatch(list(String.t()), keyword()) :: :ok | no_return()
   def dispatch([], opts) do
     if opts[:help], do: help(), else: dispatch(["list"], opts)
   end
@@ -112,19 +113,19 @@ defmodule Albedo.CLI.Commands.Tickets do
       Owl.Data.tag("OPTIONS:", :yellow),
       """
 
-          -P, --project <id>      Target a specific project (default: latest)
+          --project <id>          Target a specific project (default: latest)
           --status <status>       Filter by status: pending, in_progress, completed
           --json                  Output in JSON format (for show)
-          -y, --yes               Skip confirmation (for delete)
-          -h, --help              Show this help message
+          --yes                   Skip confirmation (for delete)
+          --help                  Show this help message
 
       """,
       Owl.Data.tag("ADD OPTIONS:", :yellow),
       """
 
-          -t, --title <title>     Ticket title (required)
-          -d, --description <d>   Ticket description
-          -p, --priority <p>      Priority: urgent, high, medium (default), low, none
+          --title <title>         Ticket title (required)
+          --description <desc>    Ticket description
+          --priority <priority>   Priority: urgent, high, medium (default), low, none
           --points <n>            Story points: 1, 2, 3, 5, 8, 13
           --type <type>           Type: feature (default), bugfix, chore, docs, test
           --labels <labels>       Comma-separated labels
@@ -134,8 +135,8 @@ defmodule Albedo.CLI.Commands.Tickets do
       """
 
           --title <title>         Update title
-          --description <d>       Update description
-          --priority <p>          Update priority
+          --description <desc>    Update description
+          --priority <priority>   Update priority
           --points <n>            Update story points
           --status <status>       Update status
           --type <type>           Update type
@@ -145,8 +146,8 @@ defmodule Albedo.CLI.Commands.Tickets do
       Owl.Data.tag("EXPORT OPTIONS:", :yellow),
       """
 
-          -f, --format <fmt>      Format: json (default), csv, markdown, github
-          -o, --output <file>     Output file (default: stdout)
+          --format <format>       Format: json (default), csv, markdown, github
+          --output <file>         Output file (default: stdout)
           --status <status>       Filter by status
 
       """,
@@ -183,7 +184,7 @@ defmodule Albedo.CLI.Commands.Tickets do
 
           # Export
           albedo tickets export
-          albedo tickets export --format csv -o tickets.csv
+          albedo tickets export --format csv --output tickets.csv
           albedo tickets export --format markdown
           albedo tickets export --format github --status pending
 
@@ -280,9 +281,9 @@ defmodule Albedo.CLI.Commands.Tickets do
       albedo tickets add "Title" --type bugfix --labels "backend,urgent"
 
     Options:
-      --title, -t       Ticket title (required)
-      --description, -d Ticket description
-      --priority, -p    Priority: urgent, high, medium (default), low, none
+      --title           Ticket title (required)
+      --description     Ticket description
+      --priority        Priority: urgent, high, medium (default), low, none
       --points          Story points (1, 2, 3, 5, 8, 13)
       --type            Type: feature (default), bugfix, chore, docs, test
       --labels          Comma-separated labels

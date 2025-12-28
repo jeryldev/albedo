@@ -196,8 +196,7 @@ defmodule Albedo.TUI do
   defp handle_char(state, "d", _projects_dir), do: handle_done(state)
   defp handle_char(state, "r", _projects_dir), do: handle_reset(state)
   defp handle_char(state, "R", projects_dir), do: handle_refresh(state, projects_dir)
-  defp handle_char(state, "c", _projects_dir), do: handle_create(state)
-  defp handle_char(state, "n", _projects_dir), do: handle_new_project(state)
+  defp handle_char(state, "n", _projects_dir), do: handle_new(state)
   defp handle_char(state, "p", _projects_dir), do: handle_plan(state)
   defp handle_char(state, "a", _projects_dir), do: handle_analyze(state)
   defp handle_char(state, "e", _projects_dir), do: handle_edit(state)
@@ -371,7 +370,7 @@ defmodule Albedo.TUI do
             state
             |> State.load_project_without_tickets(project_path)
             |> State.set_active_panel(:tickets)
-            |> State.set_message("No tickets yet. Press 'c' to add a ticket.")
+            |> State.set_message("No tickets yet. Press 'n' to add a ticket.")
 
           {:error, reason} ->
             State.set_message(state, "Error: #{inspect(reason)}")
@@ -678,23 +677,17 @@ defmodule Albedo.TUI do
     State.exit_confirm_mode(state)
   end
 
-  defp handle_new_project(%State{active_panel: :projects} = state) do
+  defp handle_new(%State{active_panel: :projects} = state) do
     State.enter_input_mode(state, :new_project, "New project task: ")
   end
 
-  defp handle_new_project(state) do
-    State.set_message(state, "Switch to projects panel to create new project")
-  end
-
-  defp handle_create(%State{active_panel: panel} = state) when panel in [:tickets, :detail] do
+  defp handle_new(%State{active_panel: panel} = state) when panel in [:tickets, :detail] do
     handle_add_ticket(state)
   end
 
-  defp handle_create(%State{active_panel: :projects} = state) do
-    State.set_message(state, "Use 'n' to create empty project, 'p' to plan with AI")
+  defp handle_new(state) do
+    State.set_message(state, "Switch to projects or tickets panel to create")
   end
-
-  defp handle_create(state), do: state
 
   defp handle_plan(%State{active_panel: :projects} = state) do
     State.enter_modal(state, :plan)
@@ -778,7 +771,7 @@ defmodule Albedo.TUI do
         |> Map.put(:current_project, 0)
         |> State.load_project_without_tickets(project_path)
         |> State.set_active_panel(:tickets)
-        |> State.set_message("Created project: #{project_state.id}. Press 'c' to add tickets.")
+        |> State.set_message("Created project: #{project_state.id}. Press 'n' to add tickets.")
 
       {:error, reason} ->
         state

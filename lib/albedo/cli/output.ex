@@ -80,15 +80,15 @@ defmodule Albedo.CLI.Output do
       Owl.Data.tag("OPTIONS:", :yellow),
       """
 
-          -t, --task <desc>       Task description (required for analyze/plan)
-          -n, --name <name>       Project name (required for plan)
-          -P, --project <name>    Custom project name (optional)
+          --task <desc>           Task description (required for analyze/plan)
+          --name <name>           Project name (required for plan)
+          --project <name>        Custom project name (optional)
           --stack <stack>         Tech stack: phoenix, rails, nextjs, fastapi, etc.
           --database <db>         Database: postgres, mysql, sqlite, mongodb
-          -i, --interactive       Enable interactive clarifying questions
-          -s, --scope <scope>     Planning scope: full (default), minimal
-          -h, --help              Show this help message
-          -v, --version           Show version
+          --interactive           Enable interactive clarifying questions
+          --scope <scope>         Planning scope: full (default), minimal
+          --help                  Show this help message
+          --version               Show version
 
       """,
       Owl.Data.tag("EXAMPLES:", :yellow),
@@ -96,11 +96,11 @@ defmodule Albedo.CLI.Output do
 
           # Analyze existing codebase
           albedo analyze ~/projects/myapp --task "Add user authentication"
-          albedo analyze . -t "Add auth" --project auth-feature
+          albedo analyze . --task "Add auth" --project auth-feature
 
           # Plan new project from scratch
           albedo plan --name my_todo --task "Build a todo app with user accounts"
-          albedo plan -n shop_api -t "E-commerce API" --stack phoenix -P shop-v1
+          albedo plan --name shop_api --task "E-commerce API" --stack phoenix
 
           # Configuration management
           albedo config                    # Show current config
@@ -128,7 +128,7 @@ defmodule Albedo.CLI.Output do
 
           # Export tickets
           albedo tickets export                        # JSON to stdout
-          albedo tickets export --format csv -o out.csv
+          albedo tickets export --format csv --output out.csv
           albedo tickets export --format markdown      # Markdown checklist
           albedo tickets export --format github        # GitHub Issues format
 
@@ -172,7 +172,7 @@ defmodule Albedo.CLI.Output do
     IO.puts("State: #{project.state}")
     IO.puts("")
 
-    if project.phases && project.phases != [] do
+    if project.phases and project.phases != [] do
       IO.puts("Completed Phases:")
 
       Enum.each(project.phases, fn phase ->
@@ -209,15 +209,15 @@ defmodule Albedo.CLI.Output do
       IO.puts("  • #{result.total_points} story points estimated")
     end
 
-    if result[:files_to_create] && result[:files_to_create] > 0 do
+    if result[:files_to_create] and result[:files_to_create] > 0 do
       IO.puts("  • #{result.files_to_create} files to create")
     end
 
-    if result[:files_to_modify] && result[:files_to_modify] > 0 do
+    if result[:files_to_modify] and result[:files_to_modify] > 0 do
       IO.puts("  • #{result.files_to_modify} files to modify")
     end
 
-    if result[:risks_identified] && result[:risks_identified] > 0 do
+    if result[:risks_identified] and result[:risks_identified] > 0 do
       IO.puts("  • #{result.risks_identified} risks identified")
     end
 
@@ -244,7 +244,7 @@ defmodule Albedo.CLI.Output do
       IO.puts("  • Recommended stack: #{result.recommended_stack}")
     end
 
-    if result[:setup_steps] && result[:setup_steps] > 0 do
+    if result[:setup_steps] and result[:setup_steps] > 0 do
       IO.puts("  • #{result.setup_steps} setup steps")
     end
 
@@ -357,9 +357,9 @@ defmodule Albedo.CLI.Output do
       albedo tickets edit <id> --type bugfix --labels "tag1,tag2"
 
     Options:
-      --title, -t       Update ticket title
-      --description, -d Update ticket description
-      --priority, -p    Priority: urgent, high, medium, low, none
+      --title           Update ticket title
+      --description     Update ticket description
+      --priority        Priority: urgent, high, medium, low, none
       --points          Story points (1, 2, 3, 5, 8, 13)
       --status          Status: pending, in_progress, completed
       --type            Type: feature, bugfix, chore, docs, test

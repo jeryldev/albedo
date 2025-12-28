@@ -152,8 +152,8 @@ defmodule Albedo.CLI.Commands.ProjectsTest do
       assert output =~ "create"
       assert output =~ "rename"
       assert output =~ "delete"
-      assert output =~ "-t, --task"
-      assert output =~ "-y, --yes"
+      assert output =~ "--task"
+      assert output =~ "--yes"
     end
   end
 

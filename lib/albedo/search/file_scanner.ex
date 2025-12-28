@@ -123,7 +123,7 @@ defmodule Albedo.Search.FileScanner do
           lines
           |> Enum.with_index(1)
           |> Enum.filter(fn {_, idx} ->
-            idx >= start_line && (is_nil(end_line) || idx <= end_line)
+            idx >= start_line and (is_nil(end_line) or idx <= end_line)
           end)
           |> Enum.map_join("\n", fn {line, idx} -> "#{idx}: #{line}" end)
 

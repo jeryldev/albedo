@@ -205,7 +205,16 @@ defmodule Albedo.TUI.State do
           created_at: created_at
       }
     else
-      _ -> base
+      false ->
+        base
+
+      {:error, %Jason.DecodeError{} = error} ->
+        Logger.warning("Failed to decode project.json for #{id}: #{inspect(error)}")
+        base
+
+      {:error, reason} ->
+        Logger.debug("Failed to read project.json for #{id}: #{inspect(reason)}")
+        base
     end
   end
 

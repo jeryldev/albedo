@@ -42,19 +42,8 @@ defmodule Albedo.CLITest do
       assert output =~ "EXAMPLES:"
     end
 
-    test "displays help with -h flag" do
-      output = run_cli_safely(["-h"])
-      assert output =~ "Albedo"
-      assert output =~ "USAGE:"
-    end
-
     test "displays version with --version flag" do
       output = run_cli_safely(["--version"])
-      assert output =~ "Albedo v"
-    end
-
-    test "displays version with -v flag" do
-      output = run_cli_safely(["-v"])
       assert output =~ "Albedo v"
     end
 
@@ -98,6 +87,14 @@ defmodule Albedo.CLITest do
 
     test "requires valid path" do
       output = run_cli_safely_stderr(["analyze", "/nonexistent/path", "--task", "test"])
+      assert output =~ "not found"
+    end
+
+    test "accepts --verbose flag without error" do
+      output =
+        run_cli_safely_stderr(["analyze", "/nonexistent/path", "--task", "test", "--verbose"])
+
+      refute output =~ "Invalid option"
       assert output =~ "not found"
     end
   end
@@ -185,25 +182,21 @@ defmodule Albedo.CLITest do
     test "help shows --interactive option" do
       output = run_cli_safely(["--help"])
       assert output =~ "--interactive"
-      assert output =~ "-i"
     end
 
     test "help shows --scope option" do
       output = run_cli_safely(["--help"])
       assert output =~ "--scope"
-      assert output =~ "-s"
       assert output =~ "full"
       assert output =~ "minimal"
     end
 
-    test "accepts short aliases for common options" do
+    test "help shows all full-name options" do
       output = run_cli_safely(["--help"])
-      assert output =~ "-t"
-      assert output =~ "-n"
-      assert output =~ "-i"
-      assert output =~ "-s"
-      assert output =~ "-h"
-      assert output =~ "-v"
+      assert output =~ "--task"
+      assert output =~ "--name"
+      assert output =~ "--help"
+      assert output =~ "--version"
     end
   end
 end

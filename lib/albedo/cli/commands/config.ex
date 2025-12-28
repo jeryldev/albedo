@@ -7,6 +7,7 @@ defmodule Albedo.CLI.Commands.Config do
   alias Albedo.CLI.Output
   alias Albedo.Config
 
+  @spec dispatch(list(String.t())) :: :ok | no_return()
   def dispatch([]) do
     dispatch(["show"])
   end
@@ -121,6 +122,7 @@ defmodule Albedo.CLI.Commands.Config do
     halt_with_error(1)
   end
 
+  @spec help() :: :ok
   def help do
     Owl.IO.puts([
       Owl.Data.tag("albedo config", :cyan),

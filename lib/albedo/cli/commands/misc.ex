@@ -7,6 +7,7 @@ defmodule Albedo.CLI.Commands.Misc do
   alias Albedo.CLI.Output
   alias Albedo.{Config, TUI}
 
+  @spec show(String.t()) :: :ok | no_return()
   def show(project_id) do
     Output.print_header()
     config = Config.load!()
@@ -33,6 +34,7 @@ defmodule Albedo.CLI.Commands.Misc do
     end
   end
 
+  @spec tui() :: :ok | no_return()
   def tui do
     case TUI.start() do
       :ok ->
@@ -49,6 +51,7 @@ defmodule Albedo.CLI.Commands.Misc do
     end
   end
 
+  @spec path(String.t()) :: :ok | no_return()
   def path(project_id) do
     config = Config.load!()
     project_path = Path.join(Config.projects_dir(config), project_id)

@@ -51,7 +51,7 @@ defmodule Albedo.CLI.Commands.TicketsTest do
     test "help includes options section" do
       output = run_command(["help"])
       assert output =~ "OPTIONS:"
-      assert output =~ "-P, --project"
+      assert output =~ "--project"
       assert output =~ "--status"
       assert output =~ "--json"
     end

@@ -7,6 +7,7 @@ defmodule Albedo.CLI.Commands.Projects do
   alias Albedo.CLI.Output
   alias Albedo.{Config, Project}
 
+  @spec dispatch(list(String.t()), keyword()) :: :ok | no_return()
   def dispatch([], opts) do
     if opts[:help], do: help(), else: list()
   end
@@ -71,9 +72,9 @@ defmodule Albedo.CLI.Commands.Projects do
       Owl.Data.tag("OPTIONS:", :yellow),
       """
 
-          -t, --task <desc>       Task description (for create)
-          -y, --yes               Skip confirmation (for delete)
-          -h, --help              Show this help message
+          --task <desc>           Task description (for create)
+          --yes                   Skip confirmation (for delete)
+          --help                  Show this help message
 
       """,
       Owl.Data.tag("EXAMPLES:", :yellow),

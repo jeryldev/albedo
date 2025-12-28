@@ -7,6 +7,7 @@ defmodule Albedo.CLI.Commands.Analysis do
   alias Albedo.CLI.Output
   alias Albedo.{Config, Project}
 
+  @spec init() :: :ok | no_return()
   def init do
     Output.print_header()
 
@@ -78,6 +79,7 @@ defmodule Albedo.CLI.Commands.Analysis do
     end
   end
 
+  @spec analyze(String.t(), keyword()) :: :ok | no_return()
   def analyze(path, opts) do
     Output.print_header()
 
@@ -122,6 +124,7 @@ defmodule Albedo.CLI.Commands.Analysis do
     end
   end
 
+  @spec resume(String.t()) :: :ok | no_return()
   def resume(project_path) do
     Output.print_header()
     project_path = Path.expand(project_path)
@@ -146,6 +149,7 @@ defmodule Albedo.CLI.Commands.Analysis do
     end
   end
 
+  @spec replan(String.t(), keyword()) :: :ok | no_return()
   def replan(project_path, opts) do
     Output.print_header()
     project_path = Path.expand(project_path)
@@ -172,6 +176,7 @@ defmodule Albedo.CLI.Commands.Analysis do
     end
   end
 
+  @spec plan(keyword()) :: :ok | no_return()
   def plan(opts) do
     Output.print_header()
 

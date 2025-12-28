@@ -164,7 +164,7 @@ defmodule Albedo.Agents.ChangePlanner do
 
   defp format_summary_section(summary) do
     domain_context =
-      if summary.domain_context && summary.domain_context != [] do
+      if summary.domain_context and summary.domain_context != [] do
         "## Domain Context\n" <>
           Enum.map_join(summary.domain_context, "\n", &"- #{&1}")
       else
@@ -172,14 +172,14 @@ defmodule Albedo.Agents.ChangePlanner do
       end
 
     in_scope =
-      if summary.in_scope && summary.in_scope != [] do
+      if summary.in_scope and summary.in_scope != [] do
         "### In Scope\n" <> Enum.map_join(summary.in_scope, "\n", &"- #{&1}")
       else
         ""
       end
 
     out_of_scope =
-      if summary.out_of_scope && summary.out_of_scope != [] do
+      if summary.out_of_scope and summary.out_of_scope != [] do
         "### Out of Scope\n" <> Enum.map_join(summary.out_of_scope, "\n", &"- #{&1}")
       else
         ""

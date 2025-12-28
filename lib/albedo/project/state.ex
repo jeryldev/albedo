@@ -202,7 +202,7 @@ defmodule Albedo.Project.State do
   def next_phase(current_phase) do
     index = Enum.find_index(@phases, &(&1 == current_phase))
 
-    if index && index < length(@phases) - 1 do
+    if is_integer(index) and index < length(@phases) - 1 do
       Enum.at(@phases, index + 1)
     else
       nil

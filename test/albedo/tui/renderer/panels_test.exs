@@ -142,7 +142,8 @@ defmodule Albedo.TUI.Renderer.PanelsTest do
       state = build_state()
       section_height = 10
 
-      border_row = Panels.build_left_panel_row(section_height, state, dims(40, section_height, 30))
+      border_row =
+        Panels.build_left_panel_row(section_height, state, dims(40, section_height, 30))
 
       assert String.contains?(border_row, "└") or String.contains?(border_row, "┗")
     end

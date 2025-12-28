@@ -191,17 +191,17 @@ Summary:
 
 ### Options
 
-| Option | Alias | Description |
-|--------|-------|-------------|
-| `--task <desc>` | `-t` | Task/feature description (required for analyze/plan) |
-| `--name <name>` | `-n` | Project name (required for plan command) |
-| `--project <name>` | `-P` | Custom project name (optional, for easier reference) |
-| `--stack <stack>` | | Tech stack hint: `phoenix`, `rails`, `nextjs`, `fastapi`, etc. |
-| `--database <db>` | | Database hint: `postgres`, `mysql`, `sqlite`, `mongodb` |
-| `--interactive` | `-i` | Enable interactive clarifying questions |
-| `--scope <scope>` | `-s` | Planning scope: `full` (default), `minimal` |
-| `--help` | `-h` | Show help message |
-| `--version` | `-v` | Show version |
+| Option | Description |
+|--------|-------------|
+| `--task <desc>` | Task/feature description (required for analyze/plan) |
+| `--name <name>` | Project name (required for plan command) |
+| `--project <name>` | Custom project name (optional, for easier reference) |
+| `--stack <stack>` | Tech stack hint: `phoenix`, `rails`, `nextjs`, `fastapi`, etc. |
+| `--database <db>` | Database hint: `postgres`, `mysql`, `sqlite`, `mongodb` |
+| `--interactive` | Enable interactive clarifying questions |
+| `--scope <scope>` | Planning scope: `full` (default), `minimal` |
+| `--help` | Show help message |
+| `--version` | Show version |
 
 ### Configuration Management
 
@@ -259,10 +259,10 @@ albedo tickets delete 1 --yes      # Delete without confirmation
 albedo tickets delete 1 2 3        # Delete multiple tickets
 
 # Export tickets
-albedo tickets export                          # JSON to stdout
-albedo tickets export --format csv -o out.csv  # CSV to file
-albedo tickets export --format markdown        # Markdown checklist
-albedo tickets export --format github          # GitHub Issues format
+albedo tickets export                                # JSON to stdout
+albedo tickets export --format csv --output out.csv  # CSV to file
+albedo tickets export --format markdown              # Markdown checklist
+albedo tickets export --format github                # GitHub Issues format
 ```
 
 ## Greenfield Planning: Building from Scratch
@@ -291,7 +291,7 @@ All projects (both `analyze` and `plan`) are stored in `~/.albedo/projects/`:
         └── FEATURE.md              # Final tickets and implementation plan
 ```
 
-**Tip:** Use `--project` or `-P` to give your project a memorable name:
+**Tip:** Use `--project` to give your project a memorable name:
 ```bash
 albedo analyze ~/myapp --task "Add auth" --project auth-feature
 albedo show auth-feature       # View the output
