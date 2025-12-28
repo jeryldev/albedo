@@ -2,9 +2,14 @@ defmodule Albedo.TUI.State do
   @moduledoc """
   State management for the TUI application.
   Uses Elm Architecture pattern: state + update.
+
+  Delegates to focused sub-modules:
+  - State.Modal - Modal dialog operations
+  - State.Editing - Edit mode, input mode, confirm mode
   """
 
   alias Albedo.Tickets
+  alias Albedo.TUI.State.{Editing, Modal}
   alias Albedo.Utils.Helpers
 
   require Logger
@@ -45,8 +50,6 @@ defmodule Albedo.TUI.State do
 
   @type panel :: :projects | :tickets | :research | :detail
   @type mode :: :normal | :command | :confirm | :edit | :input | :help | :modal
-
-  @editable_fields [:title, :description, :type, :priority, :estimate, :labels]
 
   @type research_file :: %{
           name: String.t(),
@@ -142,7 +145,7 @@ defmodule Albedo.TUI.State do
     }
   end
 
-  def editable_fields, do: @editable_fields
+  defdelegate editable_fields, to: Editing
 
   def load_projects(%__MODULE__{} = state, projects_dir) do
     projects =
@@ -470,215 +473,27 @@ defmodule Albedo.TUI.State do
     %{state | quit: true}
   end
 
-  def enter_edit_mode(%__MODULE__{} = state) do
-    case current_ticket(state) do
-      nil ->
-        state
+  defdelegate enter_edit_mode(state), to: Editing
+  defdelegate exit_edit_mode(state), to: Editing
+  defdelegate next_edit_field(state), to: Editing
+  defdelegate prev_edit_field(state), to: Editing
+  def edit_insert_char(state, char), do: Editing.insert_char(state, char)
+  def edit_delete_char(state), do: Editing.delete_char(state)
+  def edit_move_cursor_left(state), do: Editing.move_cursor_left(state)
+  def edit_move_cursor_right(state), do: Editing.move_cursor_right(state)
+  def edit_cursor_home(state), do: Editing.cursor_home(state)
+  def edit_cursor_end(state), do: Editing.cursor_end(state)
+  defdelegate get_edit_changes(state), to: Editing
 
-      ticket ->
-        %{
-          state
-          | mode: :edit,
-            edit_field: :title,
-            edit_buffer: ticket.title,
-            edit_cursor: String.length(ticket.title)
-        }
-    end
-  end
+  defdelegate enter_input_mode(state, input_mode, prompt), to: Editing
+  defdelegate exit_input_mode(state), to: Editing
+  defdelegate input_insert_char(state, char), to: Editing
+  defdelegate input_delete_char(state), to: Editing
+  defdelegate input_move_cursor_left(state), to: Editing
+  defdelegate input_move_cursor_right(state), to: Editing
 
-  def exit_edit_mode(%__MODULE__{} = state) do
-    %{
-      state
-      | mode: :normal,
-        edit_field: nil,
-        edit_buffer: nil,
-        edit_cursor: 0
-    }
-  end
-
-  def next_edit_field(%__MODULE__{edit_field: current} = state) do
-    fields = @editable_fields
-    current_idx = Enum.find_index(fields, &(&1 == current)) || 0
-    next_idx = rem(current_idx + 1, length(fields))
-    next_field = Enum.at(fields, next_idx)
-
-    ticket = current_ticket(state)
-    value = get_field_value(ticket, next_field)
-
-    %{
-      state
-      | edit_field: next_field,
-        edit_buffer: value,
-        edit_cursor: String.length(value)
-    }
-  end
-
-  def prev_edit_field(%__MODULE__{edit_field: current} = state) do
-    fields = @editable_fields
-    current_idx = Enum.find_index(fields, &(&1 == current)) || 0
-    prev_idx = if current_idx == 0, do: length(fields) - 1, else: current_idx - 1
-    prev_field = Enum.at(fields, prev_idx)
-
-    ticket = current_ticket(state)
-    value = get_field_value(ticket, prev_field)
-
-    %{
-      state
-      | edit_field: prev_field,
-        edit_buffer: value,
-        edit_cursor: String.length(value)
-    }
-  end
-
-  def edit_insert_char(%__MODULE__{edit_buffer: buffer, edit_cursor: cursor} = state, char) do
-    {before, after_cursor} = String.split_at(buffer, cursor)
-    new_buffer = before <> char <> after_cursor
-
-    %{state | edit_buffer: new_buffer, edit_cursor: cursor + String.length(char)}
-  end
-
-  def edit_delete_char(%__MODULE__{edit_buffer: buffer, edit_cursor: cursor} = state) do
-    if cursor > 0 do
-      {before, after_cursor} = String.split_at(buffer, cursor)
-      new_before = String.slice(before, 0, String.length(before) - 1)
-      new_buffer = new_before <> after_cursor
-
-      %{state | edit_buffer: new_buffer, edit_cursor: cursor - 1}
-    else
-      state
-    end
-  end
-
-  def edit_move_cursor_left(%__MODULE__{edit_cursor: cursor} = state) do
-    %{state | edit_cursor: max(0, cursor - 1)}
-  end
-
-  def edit_move_cursor_right(%__MODULE__{edit_buffer: buffer, edit_cursor: cursor} = state) do
-    %{state | edit_cursor: min(String.length(buffer), cursor + 1)}
-  end
-
-  def edit_cursor_home(%__MODULE__{} = state) do
-    %{state | edit_cursor: 0}
-  end
-
-  def edit_cursor_end(%__MODULE__{edit_buffer: buffer} = state) do
-    %{state | edit_cursor: String.length(buffer)}
-  end
-
-  def get_edit_changes(%__MODULE__{edit_field: field, edit_buffer: buffer}) do
-    %{field => parse_field_value(field, buffer)}
-  end
-
-  defp get_field_value(ticket, :title), do: ticket.title || ""
-  defp get_field_value(ticket, :description), do: ticket.description || ""
-  defp get_field_value(ticket, :type), do: to_string(ticket.type)
-  defp get_field_value(ticket, :priority), do: to_string(ticket.priority)
-
-  defp get_field_value(ticket, :estimate),
-    do: if(ticket.estimate, do: to_string(ticket.estimate), else: "")
-
-  defp get_field_value(ticket, :labels), do: Enum.join(ticket.labels, ", ")
-  defp get_field_value(_, _), do: ""
-
-  defp parse_field_value(:labels, value), do: String.split(value, ~r/,\s*/, trim: true)
-  defp parse_field_value(:estimate, ""), do: nil
-
-  defp parse_field_value(:estimate, value) do
-    case Integer.parse(value) do
-      {n, _} when n > 0 -> n
-      _ -> nil
-    end
-  end
-
-  defp parse_field_value(:type, value) do
-    case value do
-      "feature" -> :feature
-      "enhancement" -> :enhancement
-      "bugfix" -> :bugfix
-      "chore" -> :chore
-      "docs" -> :docs
-      "test" -> :test
-      _ -> :feature
-    end
-  end
-
-  defp parse_field_value(:priority, value) do
-    case value do
-      "urgent" -> :urgent
-      "high" -> :high
-      "medium" -> :medium
-      "low" -> :low
-      "none" -> :none
-      _ -> :medium
-    end
-  end
-
-  defp parse_field_value(_, value), do: value
-
-  def enter_input_mode(%__MODULE__{} = state, input_mode, prompt) do
-    %{
-      state
-      | mode: :input,
-        input_mode: input_mode,
-        input_prompt: prompt,
-        input_buffer: "",
-        input_cursor: 0
-    }
-  end
-
-  def exit_input_mode(%__MODULE__{} = state) do
-    %{
-      state
-      | mode: :normal,
-        input_mode: nil,
-        input_prompt: nil,
-        input_buffer: nil,
-        input_cursor: 0
-    }
-  end
-
-  def input_insert_char(%__MODULE__{input_buffer: buffer, input_cursor: cursor} = state, char) do
-    {before, after_cursor} = String.split_at(buffer, cursor)
-    new_buffer = before <> char <> after_cursor
-    %{state | input_buffer: new_buffer, input_cursor: cursor + String.length(char)}
-  end
-
-  def input_delete_char(%__MODULE__{input_buffer: buffer, input_cursor: cursor} = state) do
-    if cursor > 0 do
-      {before, after_cursor} = String.split_at(buffer, cursor)
-      new_before = String.slice(before, 0, String.length(before) - 1)
-      new_buffer = new_before <> after_cursor
-      %{state | input_buffer: new_buffer, input_cursor: cursor - 1}
-    else
-      state
-    end
-  end
-
-  def input_move_cursor_left(%__MODULE__{input_cursor: cursor} = state) do
-    %{state | input_cursor: max(0, cursor - 1)}
-  end
-
-  def input_move_cursor_right(%__MODULE__{input_buffer: buffer, input_cursor: cursor} = state) do
-    %{state | input_cursor: min(String.length(buffer), cursor + 1)}
-  end
-
-  def enter_confirm_mode(%__MODULE__{} = state, action, message) do
-    %{
-      state
-      | mode: :confirm,
-        confirm_action: action,
-        confirm_message: message
-    }
-  end
-
-  def exit_confirm_mode(%__MODULE__{} = state) do
-    %{
-      state
-      | mode: :normal,
-        confirm_action: nil,
-        confirm_message: nil
-    }
-  end
+  defdelegate enter_confirm_mode(state, action, message), to: Editing
+  defdelegate exit_confirm_mode(state), to: Editing
 
   def delete_project(%__MODULE__{projects: projects, current_project: idx} = state) do
     updated_projects = List.delete_at(projects, idx)
@@ -703,165 +518,21 @@ defmodule Albedo.TUI.State do
     %{state | mode: :normal}
   end
 
-  def enter_modal(%__MODULE__{} = state, type) do
-    default_path = if type == :analyze, do: File.cwd!(), else: ""
+  def enter_modal(state, type), do: Modal.enter(state, type)
+  def start_modal_operation(state), do: Modal.start_operation(state)
+  def add_modal_log(state, log), do: Modal.add_log(state, log)
 
-    modal_data = %{
-      type: type,
-      phase: :input,
-      name: "",
-      task: "",
-      name_buffer: default_path,
-      title_buffer: "",
-      task_buffer: "",
-      active_field: :name,
-      cursor: String.length(default_path),
-      logs: [],
-      result: nil,
-      current_agent: 0,
-      total_agents: 0,
-      agent_name: nil
-    }
+  def update_agent_progress(state, current, total, name),
+    do: Modal.update_agent_progress(state, current, total, name)
 
-    %{
-      state
-      | mode: :modal,
-        modal: type,
-        modal_data: modal_data,
-        modal_scroll: 0,
-        modal_task_ref: nil
-    }
-  end
-
-  def start_modal_operation(%__MODULE__{modal_data: data} = state) do
-    updated_data = %{
-      data
-      | phase: :running,
-        name: data.name_buffer,
-        task: data.task_buffer,
-        logs: ["Starting #{data.type}..."]
-    }
-
-    %{state | modal_data: updated_data}
-  end
-
-  def add_modal_log(%__MODULE__{modal_data: nil} = state, _log), do: state
-
-  def add_modal_log(%__MODULE__{modal_data: data} = state, log) do
-    updated_data = %{data | logs: data.logs ++ [log]}
-    %{state | modal_data: updated_data}
-  end
-
-  def update_agent_progress(%__MODULE__{modal_data: nil} = state, _current, _total, _name),
-    do: state
-
-  def update_agent_progress(%__MODULE__{modal_data: data} = state, current, total, name) do
-    updated_data = %{data | current_agent: current, total_agents: total, agent_name: name}
-    %{state | modal_data: updated_data}
-  end
-
-  def complete_modal(%__MODULE__{modal_data: nil} = state, _status, _result), do: state
-
-  def complete_modal(%__MODULE__{modal_data: data} = state, status, result) do
-    updated_data = %{data | phase: status, result: result}
-    %{state | modal_data: updated_data}
-  end
-
-  def modal_insert_char(%__MODULE__{modal_data: data} = state, char) do
-    {buffer_key, buffer} = get_active_modal_buffer(data)
-    cursor = data.cursor
-    {before, after_cursor} = String.split_at(buffer, cursor)
-    new_buffer = before <> char <> after_cursor
-    updated_data = Map.put(data, buffer_key, new_buffer) |> Map.put(:cursor, cursor + 1)
-    %{state | modal_data: updated_data}
-  end
-
-  def modal_delete_char(%__MODULE__{modal_data: %{cursor: 0}} = state), do: state
-
-  def modal_delete_char(%__MODULE__{modal_data: data} = state) do
-    {buffer_key, buffer} = get_active_modal_buffer(data)
-    cursor = data.cursor
-    {before, after_cursor} = String.split_at(buffer, cursor)
-    new_before = String.slice(before, 0, String.length(before) - 1)
-    new_buffer = new_before <> after_cursor
-    updated_data = Map.put(data, buffer_key, new_buffer) |> Map.put(:cursor, cursor - 1)
-    %{state | modal_data: updated_data}
-  end
-
-  def modal_move_cursor_left(%__MODULE__{modal_data: data} = state) do
-    updated_data = %{data | cursor: max(0, data.cursor - 1)}
-    %{state | modal_data: updated_data}
-  end
-
-  def modal_move_cursor_right(%__MODULE__{modal_data: data} = state) do
-    {_buffer_key, buffer} = get_active_modal_buffer(data)
-    updated_data = %{data | cursor: min(String.length(buffer), data.cursor + 1)}
-    %{state | modal_data: updated_data}
-  end
-
-  def modal_next_field(
-        %__MODULE__{modal: :analyze, modal_data: %{active_field: :name} = data} = state
-      ) do
-    updated_data = %{data | active_field: :title, cursor: String.length(data.title_buffer)}
-    %{state | modal_data: updated_data}
-  end
-
-  def modal_next_field(
-        %__MODULE__{modal: :analyze, modal_data: %{active_field: :title} = data} = state
-      ) do
-    updated_data = %{data | active_field: :task, cursor: String.length(data.task_buffer)}
-    %{state | modal_data: updated_data}
-  end
-
-  def modal_next_field(
-        %__MODULE__{modal: :analyze, modal_data: %{active_field: :task} = data} = state
-      ) do
-    updated_data = %{data | active_field: :name, cursor: String.length(data.name_buffer)}
-    %{state | modal_data: updated_data}
-  end
-
-  def modal_next_field(%__MODULE__{modal_data: %{active_field: :name} = data} = state) do
-    updated_data = %{data | active_field: :task, cursor: String.length(data.task_buffer)}
-    %{state | modal_data: updated_data}
-  end
-
-  def modal_next_field(%__MODULE__{modal_data: %{active_field: :task} = data} = state) do
-    updated_data = %{data | active_field: :name, cursor: String.length(data.name_buffer)}
-    %{state | modal_data: updated_data}
-  end
-
-  def modal_prev_field(%__MODULE__{modal_data: data} = state) do
-    modal_next_field(%{state | modal_data: data})
-  end
-
-  defp get_active_modal_buffer(%{active_field: :name, name_buffer: buffer}),
-    do: {:name_buffer, buffer}
-
-  defp get_active_modal_buffer(%{active_field: :title, title_buffer: buffer}),
-    do: {:title_buffer, buffer}
-
-  defp get_active_modal_buffer(%{active_field: :task, task_buffer: buffer}),
-    do: {:task_buffer, buffer}
-
-  def exit_modal(%__MODULE__{} = state) do
-    %{
-      state
-      | mode: :normal,
-        modal: nil,
-        modal_data: nil,
-        modal_scroll: 0,
-        modal_task_ref: nil
-    }
-  end
-
-  def scroll_modal_up(%__MODULE__{modal_scroll: scroll} = state) do
-    %{state | modal_scroll: max(0, scroll - 1)}
-  end
-
-  def scroll_modal_down(%__MODULE__{modal_data: nil} = state), do: state
-
-  def scroll_modal_down(%__MODULE__{modal_scroll: scroll, modal_data: data} = state) do
-    max_scroll = max(0, length(data.logs) - 1)
-    %{state | modal_scroll: min(max_scroll, scroll + 1)}
-  end
+  def complete_modal(state, status, result), do: Modal.complete(state, status, result)
+  def modal_insert_char(state, char), do: Modal.insert_char(state, char)
+  def modal_delete_char(state), do: Modal.delete_char(state)
+  def modal_move_cursor_left(state), do: Modal.move_cursor_left(state)
+  def modal_move_cursor_right(state), do: Modal.move_cursor_right(state)
+  def modal_next_field(state), do: Modal.next_field(state)
+  def modal_prev_field(state), do: Modal.prev_field(state)
+  def exit_modal(state), do: Modal.exit(state)
+  def scroll_modal_up(state), do: Modal.scroll_up(state)
+  def scroll_modal_down(state), do: Modal.scroll_down(state)
 end
