@@ -50,7 +50,7 @@ defmodule Albedo do
   def configured? do
     config = Albedo.Config.load!()
     api_key = Albedo.Config.api_key(config)
-    api_key != nil && api_key != ""
+    api_key != nil and api_key != ""
   end
 
   @doc """

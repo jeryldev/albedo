@@ -128,7 +128,7 @@ defmodule Albedo.LLM.Client do
   """
   def provider_available?(provider) do
     api_key = Config.api_key_for_provider(provider)
-    api_key != nil && api_key != ""
+    api_key != nil and api_key != ""
   end
 
   @doc """
