@@ -99,6 +99,7 @@ defmodule Albedo.Project.Worker do
 
   @impl true
   def handle_info(:start_analysis, state) do
+    Logger.info("Starting analysis", project_id: state.id, task: state.task)
     print_phase_header(state, "Starting analysis")
     state = start_next_phase(state)
     {:noreply, state}
@@ -106,12 +107,14 @@ defmodule Albedo.Project.Worker do
 
   def handle_info(:start_greenfield_planning, state) do
     project_name = state.context[:project_name] || "new project"
+    Logger.info("Starting greenfield planning", project_id: state.id, project_name: project_name)
     print_phase_header(state, "Planning greenfield project: #{project_name}")
     state = start_next_phase(state)
     {:noreply, state}
   end
 
   def handle_info(:resume_analysis, state) do
+    Logger.info("Resuming analysis", project_id: state.id, current_phase: state.current_phase)
     print_phase_header(state, "Resuming analysis")
     state = start_next_phase(state)
     {:noreply, state}
@@ -123,11 +126,13 @@ defmodule Albedo.Project.Worker do
   end
 
   def handle_info({:agent_complete, phase, findings}, state) do
+    Logger.info("Phase completed", project_id: state.id, phase: phase)
     print_phase_complete(state, phase)
     state = State.complete_phase(state, phase, findings)
     State.save(state)
 
     if State.complete?(state) do
+      Logger.info("Project completed", project_id: state.id)
       state = finalize_project(state)
       {:stop, :normal, state}
     else
@@ -137,7 +142,7 @@ defmodule Albedo.Project.Worker do
   end
 
   def handle_info({:agent_failed, phase, reason}, state) do
-    Logger.error("Agent failed for phase #{phase}: #{inspect(reason)}")
+    Logger.error("Agent failed", project_id: state.id, phase: phase, reason: inspect(reason))
     state = State.fail_phase(state, phase, reason)
     State.save(state)
     print_phase_failed(state, phase, reason)
@@ -157,6 +162,7 @@ defmodule Albedo.Project.Worker do
   end
 
   defp start_phase(state, phase) do
+    Logger.info("Starting phase", project_id: state.id, phase: phase)
     print_phase_start(state, phase)
     state = State.start_phase(state, phase)
     State.save(state)

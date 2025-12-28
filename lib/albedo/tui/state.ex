@@ -115,7 +115,7 @@ defmodule Albedo.TUI.State do
   ## Options
     * `:project_dir` - Initial project directory path
   """
-  def new(opts \\ []) do
+  def new(opts \\ []) when is_list(opts) do
     %__MODULE__{
       project_dir: opts[:project_dir],
       data: nil,
@@ -157,7 +157,7 @@ defmodule Albedo.TUI.State do
   Loads available projects from the given directory.
   Returns state with projects list populated and sorted by creation date.
   """
-  def load_projects(%__MODULE__{} = state, projects_dir) do
+  def load_projects(%__MODULE__{} = state, projects_dir) when is_binary(projects_dir) do
     projects =
       case File.ls(projects_dir) do
         {:ok, dirs} ->

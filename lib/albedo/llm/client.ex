@@ -66,14 +66,46 @@ defmodule Albedo.LLM.Client do
   end
 
   defp execute_provider_chat(config, prompt, opts, provider_module) do
+    provider = Config.provider(config)
+    model = opts[:model] || Config.model(config)
+    prompt_length = String.length(prompt)
+
+    Logger.debug("LLM request starting",
+      provider: provider,
+      model: model,
+      prompt_length: prompt_length
+    )
+
     request_opts = [
       api_key: Config.api_key(config),
-      model: opts[:model] || Config.model(config),
+      model: model,
       temperature: opts[:temperature] || Config.temperature(config),
       max_tokens: opts[:max_tokens]
     ]
 
-    provider_module.chat(prompt, request_opts)
+    start_time = System.monotonic_time(:millisecond)
+    result = provider_module.chat(prompt, request_opts)
+    duration_ms = System.monotonic_time(:millisecond) - start_time
+
+    case result do
+      {:ok, response} ->
+        Logger.debug("LLM request completed",
+          provider: provider,
+          model: model,
+          duration_ms: duration_ms,
+          response_length: String.length(response)
+        )
+
+      {:error, reason} ->
+        Logger.debug("LLM request failed",
+          provider: provider,
+          model: model,
+          duration_ms: duration_ms,
+          error: inspect(reason)
+        )
+    end
+
+    result
   end
 
   defp log_retry(attempt, delay_ms, reason) do

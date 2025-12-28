@@ -16,6 +16,9 @@ defmodule Albedo.Search.Ripgrep do
     "doc"
   ]
 
+  # Characters that could be dangerous in shell contexts
+  @dangerous_chars [?`, ?$, ?;, ?&, ?|, ?>, ?<, ?\n, ?\r, ?\0]
+
   @doc """
   Check if ripgrep is available on the system.
   """
@@ -38,35 +41,55 @@ defmodule Albedo.Search.Ripgrep do
     - :exclude - Additional patterns to exclude
     - :case_insensitive - Case insensitive search (default: false)
   """
-  def search(pattern, opts \\ []) do
-    path = opts[:path] || File.cwd!()
-    context = opts[:context] || 2
-    max_count = opts[:max_count]
-    file_type = opts[:type]
-    glob = opts[:glob]
-    case_insensitive = opts[:case_insensitive] || false
-    extra_exclude = opts[:exclude] || []
+  def search(pattern, opts \\ []) when is_binary(pattern) and is_list(opts) do
+    with :ok <- validate_pattern(pattern) do
+      path = opts[:path] || File.cwd!()
+      context = opts[:context] || 2
+      max_count = opts[:max_count]
+      file_type = opts[:type]
+      glob = opts[:glob]
+      case_insensitive = opts[:case_insensitive] || false
+      extra_exclude = opts[:exclude] || []
 
-    args =
-      ["--json", "-C", to_string(context)]
-      |> add_type_filter(file_type)
-      |> add_glob_filter(glob)
-      |> add_max_count(max_count)
-      |> add_case_flag(case_insensitive)
-      |> add_exclude_patterns(extra_exclude)
-      |> Kernel.++([pattern, path])
+      args =
+        ["--json", "-C", to_string(context)]
+        |> add_type_filter(file_type)
+        |> add_glob_filter(glob)
+        |> add_max_count(max_count)
+        |> add_case_flag(case_insensitive)
+        |> add_exclude_patterns(extra_exclude)
+        |> Kernel.++([pattern, path])
 
-    case System.cmd("rg", args, stderr_to_stdout: true) do
-      {output, 0} ->
-        {:ok, parse_json_output(output)}
+      case System.cmd("rg", args, stderr_to_stdout: true) do
+        {output, 0} ->
+          {:ok, parse_json_output(output)}
 
-      {_output, 1} ->
-        {:ok, []}
+        {_output, 1} ->
+          {:ok, []}
 
-      {output, _} ->
-        Logger.warning("ripgrep error: #{output}")
-        {:error, output}
+        {output, _} ->
+          Logger.warning("ripgrep error: #{output}")
+          {:error, output}
+      end
     end
+  end
+
+  @doc """
+  Validates a search pattern for dangerous characters.
+  Returns :ok if safe, {:error, reason} if dangerous.
+  """
+  def validate_pattern(pattern) when is_binary(pattern) do
+    if safe_pattern?(pattern) do
+      :ok
+    else
+      {:error, :dangerous_pattern}
+    end
+  end
+
+  defp safe_pattern?(pattern) do
+    pattern
+    |> String.to_charlist()
+    |> Enum.all?(fn char -> char not in @dangerous_chars end)
   end
 
   @doc """

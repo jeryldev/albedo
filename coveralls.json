@@ -1,0 +1,8 @@
+{
+  "skip_files": [
+    "lib/albedo/cli/output.ex",
+    "test/"
+  ],
+  "minimum_coverage": 70,
+  "treat_no_relevant_lines_as_covered": true
+}

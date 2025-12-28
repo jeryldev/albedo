@@ -68,21 +68,20 @@ defmodule Albedo.CLI do
     {opts, args, invalid}
   end
 
-  defp run({opts, args, invalid}) do
+  defp run({_opts, _args, [_ | _] = invalid}), do: handle_invalid_args(invalid)
+  defp run({opts, args, []}) when is_list(opts), do: dispatch_command(opts, args)
+
+  defp dispatch_command(opts, args) do
     cond do
-      invalid != [] ->
-        Output.print_invalid_args(invalid)
-        halt_with_error(1)
-
-      opts[:help] ->
-        Output.print_help()
-
-      opts[:version] ->
-        Output.print_version()
-
-      true ->
-        run_command(args, opts)
+      opts[:help] -> Output.print_help()
+      opts[:version] -> Output.print_version()
+      true -> run_command(args, opts)
     end
+  end
+
+  defp handle_invalid_args(invalid) do
+    Output.print_invalid_args(invalid)
+    halt_with_error(1)
   end
 
   defp run_command([], _opts) do

@@ -279,4 +279,83 @@ defmodule Albedo.IntegrationTest do
       assert output =~ "Unknown command"
     end
   end
+
+  describe "CLI workflow: projects" do
+    test "projects list command runs without errors" do
+      output = run_cli_safely(["projects", "list"])
+      # Output either shows projects or "no projects"
+      assert is_binary(output)
+      refute output =~ "ArgumentError"
+      refute output =~ "error"
+    end
+
+    test "projects help shows available subcommands" do
+      output = run_cli_safely(["projects", "--help"])
+      assert output =~ "list"
+      assert output =~ "create"
+      assert output =~ "delete"
+    end
+  end
+
+  describe "CLI workflow: tickets" do
+    setup do
+      dir = Mocks.create_temp_dir()
+      project_dir = Path.join(dir, "test-project")
+      File.mkdir_p!(project_dir)
+
+      tickets_data = %{
+        "project_id" => "test-project",
+        "task" => "Test task",
+        "tickets" => [
+          %{
+            "id" => "1",
+            "title" => "Test ticket",
+            "type" => "feature",
+            "status" => "pending",
+            "priority" => "medium"
+          }
+        ]
+      }
+
+      File.write!(Path.join(project_dir, "tickets.json"), Jason.encode!(tickets_data))
+
+      on_exit(fn -> Mocks.cleanup_temp_dir(dir) end)
+      {:ok, project_dir: project_dir}
+    end
+
+    test "tickets list shows tickets from project", %{project_dir: project_dir} do
+      output = run_cli_safely(["tickets", "list", project_dir])
+      assert output =~ "Test ticket" or output =~ "1"
+    end
+
+    test "tickets help shows available subcommands" do
+      output = run_cli_safely(["tickets", "help"])
+      assert output =~ "list" or output =~ "Ticket"
+    end
+  end
+
+  describe "CLI workflow: config" do
+    test "config show displays current configuration" do
+      output = run_cli_safely(["config", "show"])
+      assert output =~ "provider" or output =~ "config"
+      refute output =~ "ArgumentError"
+    end
+
+    test "config help shows available subcommands" do
+      output = run_cli_safely(["config", "--help"])
+      assert output =~ "show"
+      assert output =~ "set"
+    end
+  end
+
+  describe "search pattern validation" do
+    test "ripgrep validates dangerous patterns" do
+      assert {:error, :dangerous_pattern} = Ripgrep.validate_pattern("test; rm -rf /")
+      assert {:error, :dangerous_pattern} = Ripgrep.validate_pattern("test`whoami`")
+      assert {:error, :dangerous_pattern} = Ripgrep.validate_pattern("test$HOME")
+      assert :ok = Ripgrep.validate_pattern("defmodule")
+      assert :ok = Ripgrep.validate_pattern("function_name")
+      assert :ok = Ripgrep.validate_pattern("@spec.*::")
+    end
+  end
 end

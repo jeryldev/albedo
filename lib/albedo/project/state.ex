@@ -168,6 +168,11 @@ defmodule Albedo.Project.State do
 
   @doc """
   Save project state to disk.
+
+  Called after each phase transition for crash recovery. Intentionally
+  not batched/debounced to ensure state can be resumed after unexpected
+  termination. The frequency of saves is bounded by phase transitions,
+  which are infrequent enough that I/O overhead is negligible.
   """
   def save(%__MODULE__{} = state) do
     File.mkdir_p!(state.project_dir)
