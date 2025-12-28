@@ -1125,6 +1125,99 @@ defmodule Albedo.TUI.StateTest do
     end
   end
 
+  describe "modal_next_field/1" do
+    test "cycles name -> task for plan modal" do
+      state = State.new() |> State.enter_modal(:plan)
+      assert state.modal_data.active_field == :name
+
+      state = State.modal_next_field(state)
+      assert state.modal_data.active_field == :task
+
+      state = State.modal_next_field(state)
+      assert state.modal_data.active_field == :name
+    end
+
+    test "cycles name -> title -> task for analyze modal" do
+      state = State.new() |> State.enter_modal(:analyze)
+      assert state.modal_data.active_field == :name
+
+      state = State.modal_next_field(state)
+      assert state.modal_data.active_field == :title
+
+      state = State.modal_next_field(state)
+      assert state.modal_data.active_field == :task
+
+      state = State.modal_next_field(state)
+      assert state.modal_data.active_field == :name
+    end
+
+    test "updates cursor to end of new buffer" do
+      state = State.new() |> State.enter_modal(:plan)
+      state = %{state | modal_data: %{state.modal_data | task_buffer: "test task"}}
+
+      state = State.modal_next_field(state)
+      assert state.modal_data.active_field == :task
+      assert state.modal_data.cursor == String.length("test task")
+    end
+  end
+
+  describe "modal_prev_field/1" do
+    test "cycles task -> name for plan modal" do
+      state = State.new() |> State.enter_modal(:plan)
+      state = %{state | modal_data: %{state.modal_data | active_field: :task}}
+
+      state = State.modal_prev_field(state)
+      assert state.modal_data.active_field == :name
+    end
+
+    test "cycles task -> title -> name for analyze modal" do
+      state = State.new() |> State.enter_modal(:analyze)
+      state = %{state | modal_data: %{state.modal_data | active_field: :task}}
+
+      state = State.modal_prev_field(state)
+      assert state.modal_data.active_field == :title
+
+      state = State.modal_prev_field(state)
+      assert state.modal_data.active_field == :name
+
+      state = State.modal_prev_field(state)
+      assert state.modal_data.active_field == :task
+    end
+  end
+
+  describe "enter_modal/2" do
+    test "sets mode to modal and initializes modal_data for plan" do
+      state = State.new() |> State.enter_modal(:plan)
+
+      assert state.mode == :modal
+      assert state.modal == :plan
+      assert state.modal_data.type == :plan
+      assert state.modal_data.phase == :input
+      assert state.modal_data.active_field == :name
+    end
+
+    test "sets mode to modal and initializes modal_data for analyze" do
+      state = State.new() |> State.enter_modal(:analyze)
+
+      assert state.mode == :modal
+      assert state.modal == :analyze
+      assert state.modal_data.type == :analyze
+      assert state.modal_data.phase == :input
+      assert state.modal_data.active_field == :name
+    end
+  end
+
+  describe "exit_modal/1" do
+    test "clears modal state and returns to normal mode" do
+      state = State.new() |> State.enter_modal(:plan)
+      state = State.exit_modal(state)
+
+      assert state.mode == :normal
+      assert state.modal == nil
+      assert state.modal_data == nil
+    end
+  end
+
   defp build_tickets_data(tickets) do
     %{
       project_id: "test-project",

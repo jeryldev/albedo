@@ -256,42 +256,60 @@ defmodule Albedo.Tickets.Ticket do
     }
   end
 
+  @simple_fields [
+    :id,
+    :title,
+    :description,
+    :estimate,
+    :labels,
+    :acceptance_criteria,
+    :implementation_notes
+  ]
+  @atom_fields [:type, :status, :priority]
+  @atom_defaults %{type: "feature", status: "pending", priority: "medium"}
+  @list_defaults %{labels: [], acceptance_criteria: []}
+
   def to_json(%__MODULE__{} = ticket) do
-    %{
-      "id" => ticket.id,
-      "title" => ticket.title,
-      "description" => ticket.description,
-      "type" => to_string(ticket.type),
-      "status" => to_string(ticket.status),
-      "priority" => to_string(ticket.priority),
-      "estimate" => ticket.estimate,
-      "labels" => ticket.labels,
-      "acceptance_criteria" => ticket.acceptance_criteria,
-      "implementation_notes" => ticket.implementation_notes,
-      "files" => files_to_json(ticket.files),
-      "dependencies" => dependencies_to_json(ticket.dependencies),
-      "external_refs" => external_refs_to_json(ticket.external_refs),
+    simple = Map.new(@simple_fields, fn field -> {to_string(field), Map.get(ticket, field)} end)
+
+    atoms =
+      Map.new(@atom_fields, fn field -> {to_string(field), to_string(Map.get(ticket, field))} end)
+
+    nested = %{
+      "files" => stringify_keys(ticket.files),
+      "dependencies" => stringify_keys(ticket.dependencies),
+      "external_refs" => stringify_keys(ticket.external_refs),
       "timestamps" => timestamps_to_json(ticket.timestamps)
     }
+
+    Map.merge(simple, atoms) |> Map.merge(nested)
   end
 
   def from_json(json) when is_map(json) do
-    %__MODULE__{
-      id: json["id"],
-      title: json["title"],
-      description: json["description"],
-      type: String.to_existing_atom(json["type"] || "feature"),
-      status: String.to_existing_atom(json["status"] || "pending"),
-      priority: String.to_existing_atom(json["priority"] || "medium"),
-      estimate: json["estimate"],
-      labels: json["labels"] || [],
-      acceptance_criteria: json["acceptance_criteria"] || [],
-      implementation_notes: json["implementation_notes"],
+    simple =
+      Map.new(@simple_fields, fn field ->
+        value = json[to_string(field)]
+        {field, value || Map.get(@list_defaults, field)}
+      end)
+
+    atoms =
+      Map.new(@atom_fields, fn field ->
+        value = json[to_string(field)] || @atom_defaults[field]
+        {field, String.to_existing_atom(value)}
+      end)
+
+    nested = %{
       files: parse_files(json["files"]),
       dependencies: parse_dependencies(json["dependencies"]),
       external_refs: parse_external_refs(json["external_refs"]),
       timestamps: parse_timestamps(json["timestamps"])
     }
+
+    struct!(__MODULE__, Map.merge(simple, atoms) |> Map.merge(nested))
+  end
+
+  defp stringify_keys(map) when is_map(map) do
+    Map.new(map, fn {k, v} -> {to_string(k), v} end)
   end
 
   defp defaults do
@@ -471,23 +489,6 @@ defmodule Albedo.Tickets.Ticket do
       {:ok, dt, _} -> dt
       _ -> nil
     end
-  end
-
-  defp files_to_json(files) do
-    %{"create" => files.create, "modify" => files.modify}
-  end
-
-  defp dependencies_to_json(deps) do
-    %{"blocked_by" => deps.blocked_by, "blocks" => deps.blocks}
-  end
-
-  defp external_refs_to_json(refs) do
-    %{
-      "linear" => refs.linear,
-      "jira" => refs.jira,
-      "github" => refs.github,
-      "asana" => refs.asana
-    }
   end
 
   defp timestamps_to_json(ts) do

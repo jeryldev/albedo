@@ -128,40 +128,50 @@ defmodule Albedo.TUI.State.Modal do
     %{state | modal_data: updated_data}
   end
 
+  @field_cycle_analyze [:name, :title, :task]
+  @field_cycle_plan [:name, :task]
+
   @doc """
   Move to the next modal field.
   """
-  def next_field(%State{modal: :analyze, modal_data: %{active_field: :name} = data} = state) do
-    updated_data = %{data | active_field: :title, cursor: String.length(data.title_buffer)}
-    %{state | modal_data: updated_data}
-  end
-
-  def next_field(%State{modal: :analyze, modal_data: %{active_field: :title} = data} = state) do
-    updated_data = %{data | active_field: :task, cursor: String.length(data.task_buffer)}
-    %{state | modal_data: updated_data}
-  end
-
-  def next_field(%State{modal: :analyze, modal_data: %{active_field: :task} = data} = state) do
-    updated_data = %{data | active_field: :name, cursor: String.length(data.name_buffer)}
-    %{state | modal_data: updated_data}
-  end
-
-  def next_field(%State{modal_data: %{active_field: :name} = data} = state) do
-    updated_data = %{data | active_field: :task, cursor: String.length(data.task_buffer)}
-    %{state | modal_data: updated_data}
-  end
-
-  def next_field(%State{modal_data: %{active_field: :task} = data} = state) do
-    updated_data = %{data | active_field: :name, cursor: String.length(data.name_buffer)}
+  def next_field(%State{modal: modal_type, modal_data: data} = state) do
+    cycle = field_cycle(modal_type)
+    next = cycle_field(data.active_field, cycle, :forward)
+    buffer = get_buffer_for_field(data, next)
+    updated_data = %{data | active_field: next, cursor: String.length(buffer)}
     %{state | modal_data: updated_data}
   end
 
   @doc """
   Move to the previous modal field.
   """
-  def prev_field(%State{modal_data: data} = state) do
-    next_field(%{state | modal_data: data})
+  def prev_field(%State{modal: modal_type, modal_data: data} = state) do
+    cycle = field_cycle(modal_type)
+    prev = cycle_field(data.active_field, cycle, :backward)
+    buffer = get_buffer_for_field(data, prev)
+    updated_data = %{data | active_field: prev, cursor: String.length(buffer)}
+    %{state | modal_data: updated_data}
   end
+
+  defp field_cycle(:analyze), do: @field_cycle_analyze
+  defp field_cycle(_), do: @field_cycle_plan
+
+  defp cycle_field(current, cycle, direction) do
+    idx = Enum.find_index(cycle, &(&1 == current)) || 0
+    len = length(cycle)
+
+    next_idx =
+      case direction do
+        :forward -> rem(idx + 1, len)
+        :backward -> rem(idx - 1 + len, len)
+      end
+
+    Enum.at(cycle, next_idx)
+  end
+
+  defp get_buffer_for_field(data, :name), do: data.name_buffer
+  defp get_buffer_for_field(data, :title), do: data.title_buffer || ""
+  defp get_buffer_for_field(data, :task), do: data.task_buffer
 
   @doc """
   Exit the modal and return to normal mode.

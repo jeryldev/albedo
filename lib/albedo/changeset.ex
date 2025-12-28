@@ -163,49 +163,49 @@ defmodule Albedo.Changeset do
 
   defp cast_field(_field, value, :integer) when is_integer(value), do: {:ok, value}
 
-  defp cast_field(_field, value, :integer) when is_binary(value) do
+  defp cast_field(field, value, :integer) when is_binary(value) do
     case Integer.parse(value) do
       {int, ""} -> {:ok, int}
-      _ -> {:error, "is not a valid integer"}
+      _ -> {:error, "#{field} is not a valid integer"}
     end
   end
 
   defp cast_field(_field, value, :boolean) when is_boolean(value), do: {:ok, value}
 
-  defp cast_field(_field, value, :boolean) when is_binary(value) do
+  defp cast_field(field, value, :boolean) when is_binary(value) do
     case String.downcase(value) do
       v when v in ["true", "1", "yes"] -> {:ok, true}
       v when v in ["false", "0", "no"] -> {:ok, false}
-      _ -> {:error, "is not a valid boolean"}
+      _ -> {:error, "#{field} is not a valid boolean"}
     end
   end
 
   defp cast_field(_field, value, :atom) when is_atom(value), do: {:ok, value}
 
-  defp cast_field(_field, _value, :atom) do
-    {:error, "must be an atom (use {:enum, values} for string conversion)"}
+  defp cast_field(field, _value, :atom) do
+    {:error, "#{field} must be an atom (use {:enum, values} for string conversion)"}
   end
 
-  defp cast_field(_field, value, {:enum, allowed}) when is_atom(value) do
-    if Enum.member?(allowed, value), do: {:ok, value}, else: {:error, "is invalid"}
+  defp cast_field(field, value, {:enum, allowed}) when is_atom(value) do
+    if Enum.member?(allowed, value), do: {:ok, value}, else: {:error, "#{field} is invalid"}
   end
 
-  defp cast_field(_field, value, {:enum, allowed}) when is_binary(value) do
+  defp cast_field(field, value, {:enum, allowed}) when is_binary(value) do
     downcased = String.downcase(value)
 
     case Enum.find(allowed, fn atom -> Atom.to_string(atom) == downcased end) do
-      nil -> {:error, "is invalid"}
+      nil -> {:error, "#{field} is invalid"}
       atom -> {:ok, atom}
     end
   end
 
-  defp cast_field(_field, value, {:enum, allowed, _mapping}) when is_atom(value) do
-    if Enum.member?(allowed, value), do: {:ok, value}, else: {:error, "is invalid"}
+  defp cast_field(field, value, {:enum, allowed, _mapping}) when is_atom(value) do
+    if Enum.member?(allowed, value), do: {:ok, value}, else: {:error, "#{field} is invalid"}
   end
 
-  defp cast_field(_field, value, {:enum, _allowed, mapping}) when is_binary(value) do
+  defp cast_field(field, value, {:enum, _allowed, mapping}) when is_binary(value) do
     case Map.get(mapping, String.downcase(value)) do
-      nil -> {:error, "is invalid"}
+      nil -> {:error, "#{field} is invalid"}
       atom -> {:ok, atom}
     end
   end
@@ -219,20 +219,20 @@ defmodule Albedo.Changeset do
 
   defp cast_field(_field, %DateTime{} = value, :datetime), do: {:ok, value}
 
-  defp cast_field(_field, value, :datetime) when is_binary(value) do
+  defp cast_field(field, value, :datetime) when is_binary(value) do
     case DateTime.from_iso8601(value) do
       {:ok, dt, _} -> {:ok, dt}
-      _ -> {:error, "is not a valid datetime"}
+      _ -> {:error, "#{field} is not a valid datetime"}
     end
   end
 
   defp cast_field(_field, value, :map) when is_map(value), do: {:ok, value}
-  defp cast_field(_field, _value, :map), do: {:error, "is not a valid map"}
+  defp cast_field(field, _value, :map), do: {:error, "#{field} is not a valid map"}
 
   defp cast_field(_field, value, nil), do: {:ok, value}
 
-  defp cast_field(_field, _value, type) do
-    {:error, "cannot cast to #{inspect(type)}"}
+  defp cast_field(field, _value, type) do
+    {:error, "#{field} cannot be cast to #{inspect(type)}"}
   end
 
   defp blank?(nil), do: true

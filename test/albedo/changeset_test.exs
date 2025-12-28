@@ -63,7 +63,7 @@ defmodule Albedo.ChangesetTest do
       changeset = Changeset.cast({data, @types}, %{age: "abc"}, [:age])
 
       assert not changeset.valid?
-      assert {:age, {"is not a valid integer", []}} in changeset.errors
+      assert {:age, {"age is not a valid integer", []}} in changeset.errors
     end
 
     test "casts boolean values" do
@@ -106,7 +106,7 @@ defmodule Albedo.ChangesetTest do
       changeset = Changeset.cast({data, @types}, %{status: "invalid"}, [:status])
 
       assert not changeset.valid?
-      assert {:status, {"is invalid", []}} in changeset.errors
+      assert {:status, {"status is invalid", []}} in changeset.errors
     end
 
     test "casts enum with mapping" do
