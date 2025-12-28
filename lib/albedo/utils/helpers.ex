@@ -69,4 +69,53 @@ defmodule Albedo.Utils.Helpers do
   @spec default_list(list() | nil) :: list()
   def default_list(nil), do: []
   def default_list(list) when is_list(list), do: list
+
+  @doc """
+  Checks if a path is safe (no path traversal attempts).
+  Returns true if the path doesn't contain traversal sequences.
+
+  ## Examples
+
+      iex> Albedo.Utils.Helpers.safe_path?("my-project")
+      true
+
+      iex> Albedo.Utils.Helpers.safe_path?("../../../etc/passwd")
+      false
+
+      iex> Albedo.Utils.Helpers.safe_path?("foo/../bar")
+      false
+  """
+  @spec safe_path?(String.t()) :: boolean()
+  def safe_path?(path) when is_binary(path) do
+    not String.contains?(path, ["../", "..\\", ".."]) and
+      not String.starts_with?(path, "/") and
+      not String.starts_with?(path, "~")
+  end
+
+  def safe_path?(_), do: false
+
+  @doc """
+  Validates that a path component (directory name or filename) is safe.
+  For use when joining user-provided path components.
+
+  ## Examples
+
+      iex> Albedo.Utils.Helpers.safe_path_component?("my-project-123")
+      true
+
+      iex> Albedo.Utils.Helpers.safe_path_component?("..")
+      false
+
+      iex> Albedo.Utils.Helpers.safe_path_component?("foo/bar")
+      false
+  """
+  @spec safe_path_component?(String.t()) :: boolean()
+  def safe_path_component?(component) when is_binary(component) do
+    component != "" and
+      component != "." and
+      component != ".." and
+      not String.contains?(component, ["/", "\\", "\0"])
+  end
+
+  def safe_path_component?(_), do: false
 end

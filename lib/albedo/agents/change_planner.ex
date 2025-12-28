@@ -324,8 +324,12 @@ defmodule Albedo.Agents.ChangePlanner do
 
   defp parse_tickets(content) do
     case Parser.parse(content) do
-      {:ok, tickets} -> tickets
-      {:error, _} -> []
+      {:ok, tickets} ->
+        tickets
+
+      {:error, reason} ->
+        Logger.warning("Failed to parse LLM response for tickets: #{inspect(reason)}")
+        []
     end
   end
 

@@ -3,6 +3,8 @@ defmodule Albedo.LLM.Gemini do
   Google Gemini API client.
   """
 
+  @behaviour Albedo.LLM.Provider
+
   alias Albedo.LLM.ResponseHandler
 
   @base_url "https://generativelanguage.googleapis.com/v1beta"
@@ -18,6 +20,7 @@ defmodule Albedo.LLM.Gemini do
     - :temperature - Temperature (default: 0.3)
     - :max_tokens - Maximum tokens (default: 8192)
   """
+  @impl Albedo.LLM.Provider
   def chat(prompt, opts \\ []) do
     api_key = opts[:api_key]
 

@@ -3,6 +3,8 @@ defmodule Albedo.LLM.Claude do
   Anthropic Claude API client.
   """
 
+  @behaviour Albedo.LLM.Provider
+
   alias Albedo.LLM.ResponseHandler
 
   @base_url "https://api.anthropic.com/v1"
@@ -19,6 +21,7 @@ defmodule Albedo.LLM.Claude do
     - :temperature - Temperature (default: 0.3)
     - :max_tokens - Maximum tokens (default: 8192)
   """
+  @impl Albedo.LLM.Provider
   def chat(prompt, opts \\ []) do
     api_key = opts[:api_key]
 

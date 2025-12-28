@@ -88,4 +88,93 @@ defmodule Albedo.Utils.HelpersPropertyTest do
   defp non_nil_term do
     such_that(t <- term(), when: t != nil)
   end
+
+  describe "safe_path?/1 properties" do
+    property "rejects paths with .." do
+      forall path <- path_with_traversal() do
+        not Helpers.safe_path?(path)
+      end
+    end
+
+    property "rejects absolute paths starting with /" do
+      forall path <- absolute_path() do
+        not Helpers.safe_path?(path)
+      end
+    end
+
+    property "rejects paths starting with ~" do
+      forall path <- home_path() do
+        not Helpers.safe_path?(path)
+      end
+    end
+
+    property "accepts safe relative paths" do
+      forall path <- safe_relative_path() do
+        Helpers.safe_path?(path)
+      end
+    end
+  end
+
+  describe "safe_path_component?/1 properties" do
+    property "rejects . and .." do
+      not Helpers.safe_path_component?(".") and
+        not Helpers.safe_path_component?("..")
+    end
+
+    property "rejects components with slashes" do
+      forall component <- component_with_slash() do
+        not Helpers.safe_path_component?(component)
+      end
+    end
+
+    property "rejects empty strings" do
+      not Helpers.safe_path_component?("")
+    end
+
+    property "accepts valid directory names" do
+      forall component <- valid_component() do
+        Helpers.safe_path_component?(component)
+      end
+    end
+  end
+
+  defp path_with_traversal do
+    oneof([
+      let(prefix <- binary(), do: prefix <> "../" <> "file"),
+      let(suffix <- binary(), do: "../" <> suffix),
+      let(middle <- binary(), do: "path/" <> middle <> "/../other")
+    ])
+  end
+
+  defp absolute_path do
+    let(path <- non_empty(binary()), do: "/" <> path)
+  end
+
+  defp home_path do
+    let(path <- non_empty(binary()), do: "~/" <> path)
+  end
+
+  defp safe_relative_path do
+    let(
+      parts <- non_empty(list(valid_component())),
+      do: Enum.join(parts, "-")
+    )
+  end
+
+  defp component_with_slash do
+    let(
+      {before, after_slash} <- {non_empty(utf8()), non_empty(utf8())},
+      do: before <> "/" <> after_slash
+    )
+  end
+
+  defp valid_component do
+    such_that(
+      c <- non_empty(utf8()),
+      when:
+        c != "." and c != ".." and
+          not String.contains?(c, ["/", "\\", "\0", ".."]) and
+          not String.starts_with?(c, "~")
+    )
+  end
 end

@@ -24,7 +24,7 @@ defmodule Albedo.Changeset do
   - `:string` - Strings, trimmed automatically
   - `:integer` - Integers
   - `:boolean` - Booleans
-  - `:atom` - Atoms (from existing atoms only)
+  - `:atom` - Atoms only (rejects strings; use `{:enum, values}` for string input)
   - `{:enum, values}` - Enum with allowed values
   - `{:enum, values, mapping}` - Enum with string-to-atom mapping
   - `:list` - Lists (comma-separated strings parsed)
@@ -182,10 +182,8 @@ defmodule Albedo.Changeset do
 
   defp cast_field(_field, value, :atom) when is_atom(value), do: {:ok, value}
 
-  defp cast_field(_field, value, :atom) when is_binary(value) do
-    {:ok, String.to_existing_atom(value)}
-  rescue
-    ArgumentError -> {:error, "is not a valid atom"}
+  defp cast_field(_field, _value, :atom) do
+    {:error, "must be an atom (use {:enum, values} for string conversion)"}
   end
 
   defp cast_field(_field, value, {:enum, allowed}) when is_atom(value) do
@@ -193,15 +191,12 @@ defmodule Albedo.Changeset do
   end
 
   defp cast_field(_field, value, {:enum, allowed}) when is_binary(value) do
-    atom = String.to_existing_atom(String.downcase(value))
+    downcased = String.downcase(value)
 
-    if Enum.member?(allowed, atom) do
-      {:ok, atom}
-    else
-      {:error, "is invalid"}
+    case Enum.find(allowed, fn atom -> Atom.to_string(atom) == downcased end) do
+      nil -> {:error, "is invalid"}
+      atom -> {:ok, atom}
     end
-  rescue
-    ArgumentError -> {:error, "is invalid"}
   end
 
   defp cast_field(_field, value, {:enum, allowed, _mapping}) when is_atom(value) do

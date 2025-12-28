@@ -95,6 +95,24 @@ defmodule Albedo.Tickets.Ticket do
     "none" => :none
   }
 
+  @string_to_atom_keys %{
+    "id" => :id,
+    "title" => :title,
+    "description" => :description,
+    "type" => :type,
+    "status" => :status,
+    "priority" => :priority,
+    "estimate" => :estimate,
+    "points" => :points,
+    "labels" => :labels,
+    "acceptance_criteria" => :acceptance_criteria,
+    "implementation_notes" => :implementation_notes,
+    "files" => :files,
+    "dependencies" => :dependencies,
+    "external_refs" => :external_refs,
+    "timestamps" => :timestamps
+  }
+
   @status_mapping %{
     "pending" => :pending,
     "in_progress" => :in_progress,
@@ -294,7 +312,7 @@ defmodule Albedo.Tickets.Ticket do
   defp normalize_attrs(attrs) do
     Enum.reduce(attrs, %{}, fn
       {key, value}, acc when is_binary(key) ->
-        case safe_to_existing_atom(key) do
+        case Map.fetch(@string_to_atom_keys, key) do
           {:ok, atom_key} -> Map.put(acc, atom_key, value)
           :error -> Map.put(acc, key, value)
         end
@@ -302,12 +320,6 @@ defmodule Albedo.Tickets.Ticket do
       {key, value}, acc when is_atom(key) ->
         Map.put(acc, key, value)
     end)
-  end
-
-  defp safe_to_existing_atom(string) do
-    {:ok, String.to_existing_atom(string)}
-  rescue
-    ArgumentError -> :error
   end
 
   defp rename_points_to_estimate(attrs) do

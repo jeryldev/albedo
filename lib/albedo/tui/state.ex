@@ -5,6 +5,9 @@ defmodule Albedo.TUI.State do
   """
 
   alias Albedo.Tickets
+  alias Albedo.Utils.Helpers
+
+  require Logger
 
   defstruct [
     :project_dir,
@@ -155,7 +158,8 @@ defmodule Albedo.TUI.State do
             load_project_info(projects_dir, dir, idx)
           end)
 
-        {:error, _} ->
+        {:error, reason} ->
+          Logger.warning("Failed to list projects directory: #{inspect(reason)}")
           []
       end
 
@@ -163,8 +167,13 @@ defmodule Albedo.TUI.State do
   end
 
   defp has_project_file?(projects_dir, dir) do
-    project_file = Path.join([projects_dir, dir, "project.json"])
-    File.exists?(project_file)
+    if Helpers.safe_path_component?(dir) do
+      project_file = Path.join([projects_dir, dir, "project.json"])
+      File.exists?(project_file)
+    else
+      Logger.warning("Skipping invalid project directory: #{inspect(dir)}")
+      false
+    end
   end
 
   defp load_project_info(projects_dir, id, index) do
@@ -221,7 +230,8 @@ defmodule Albedo.TUI.State do
           }
         end)
 
-      {:error, _} ->
+      {:error, reason} ->
+        Logger.debug("Failed to list research files in #{project_dir}: #{inspect(reason)}")
         []
     end
   end
