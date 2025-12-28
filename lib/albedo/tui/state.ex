@@ -578,11 +578,26 @@ defmodule Albedo.TUI.State do
   defdelegate enter_confirm_mode(state, action, message), to: Editing
   defdelegate exit_confirm_mode(state), to: Editing
 
-  @doc "Removes the current project from the projects list and adjusts selection."
+  @doc "Removes the current project from the projects list, clears related data, and adjusts selection."
   def delete_project(%__MODULE__{projects: projects, current_project: idx} = state) do
     updated_projects = List.delete_at(projects, idx)
     new_idx = min(idx, max(0, length(updated_projects) - 1))
-    %{state | projects: updated_projects, current_project: new_idx}
+
+    %{
+      state
+      | projects: updated_projects,
+        current_project: new_idx,
+        project_dir: nil,
+        data: nil,
+        research_files: [],
+        selected_ticket: nil,
+        viewed_ticket: nil,
+        selected_file: nil,
+        viewed_file: nil,
+        detail_content: :ticket,
+        detail_scroll: 0,
+        panel_scroll: %{state.panel_scroll | tickets: 0, research: 0}
+    }
   end
 
   @doc "Updates the task description of the current project (truncated to 50 chars)."

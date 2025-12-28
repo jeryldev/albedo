@@ -880,6 +880,41 @@ defmodule Albedo.TUI.StateTest do
       assert result.current_project == 0
     end
 
+    test "delete_project clears tickets, research files, and detail state" do
+      projects = [%{id: "a", task: "task1"}, %{id: "b", task: "task2"}]
+
+      state = %State{
+        State.new()
+        | projects: projects,
+          current_project: 0,
+          project_dir: "/some/path",
+          data: %{tickets: [%{id: "1", title: "ticket"}]},
+          research_files: [%{name: "test.md", path: "/test.md", type: :markdown}],
+          selected_ticket: 0,
+          viewed_ticket: 0,
+          selected_file: 0,
+          viewed_file: 0,
+          detail_content: :research,
+          detail_scroll: 10,
+          panel_scroll: %{projects: 0, tickets: 5, research: 3}
+      }
+
+      result = State.delete_project(state)
+
+      assert result.project_dir == nil
+      assert result.data == nil
+      assert result.research_files == []
+      assert result.selected_ticket == nil
+      assert result.viewed_ticket == nil
+      assert result.selected_file == nil
+      assert result.viewed_file == nil
+      assert result.detail_content == :ticket
+      assert result.detail_scroll == 0
+      assert result.panel_scroll.tickets == 0
+      assert result.panel_scroll.research == 0
+      assert result.panel_scroll.projects == 0
+    end
+
     test "update_project_task updates task of current project" do
       projects = [%{id: "a", task: "old task"}, %{id: "b", task: "other"}]
       state = %State{State.new() | projects: projects, current_project: 0}

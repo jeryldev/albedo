@@ -43,7 +43,7 @@ defmodule Albedo.TUI.Renderer.Panels do
 
   defp build_projects_line(row, state, width, height) do
     colors = Utils.colors()
-    is_active = state.active_panel == :projects
+    is_active = state.active_panel == :projects and state.mode != :modal
     border_chars = Utils.border_chars(is_active)
     border_color = if is_active, do: colors.kanagawa_orange, else: colors.white
 
@@ -77,7 +77,7 @@ defmodule Albedo.TUI.Renderer.Panels do
 
     if project do
       is_selected = item_idx == state.current_project
-      is_active = state.active_panel == :projects
+      is_active = state.active_panel == :projects and state.mode != :modal
       build_project_item(project, width, is_selected, is_active)
     else
       String.duplicate(" ", width)
@@ -102,7 +102,7 @@ defmodule Albedo.TUI.Renderer.Panels do
 
   defp build_tickets_line(row, state, width, height) do
     colors = Utils.colors()
-    is_active = state.active_panel == :tickets
+    is_active = state.active_panel == :tickets and state.mode != :modal
     border_chars = Utils.border_chars(is_active)
     border_color = if is_active, do: colors.kanagawa_orange, else: colors.white
 
@@ -139,7 +139,7 @@ defmodule Albedo.TUI.Renderer.Panels do
 
       if ticket do
         is_selected = item_idx == state.selected_ticket
-        is_active = state.active_panel == :tickets
+        is_active = state.active_panel == :tickets and state.mode != :modal
         is_viewing = state.detail_content == :ticket
         build_ticket_item(ticket, width, is_selected, is_active, is_viewing)
       else
@@ -173,7 +173,7 @@ defmodule Albedo.TUI.Renderer.Panels do
 
   defp build_research_line(row, state, width, height) do
     colors = Utils.colors()
-    is_active = state.active_panel == :research
+    is_active = state.active_panel == :research and state.mode != :modal
     border_chars = Utils.border_chars(is_active)
     border_color = if is_active, do: colors.kanagawa_orange, else: colors.white
 
@@ -214,7 +214,7 @@ defmodule Albedo.TUI.Renderer.Panels do
 
       file ->
         is_selected = item_idx == state.selected_file
-        is_active = state.active_panel == :research
+        is_active = state.active_panel == :research and state.mode != :modal
         is_viewing = state.detail_content == :research
         build_research_item(file, width, is_selected, is_active, is_viewing)
     end

@@ -172,14 +172,14 @@ defmodule Albedo.CLI.Output do
     IO.puts("State: #{project.state}")
     IO.puts("")
 
-    if project.phases and project.phases != [] do
-      IO.puts("Completed Phases:")
+    case project.phases do
+      [_ | _] = phases ->
+        IO.puts("Completed Phases:")
+        Enum.each(phases, fn phase -> IO.puts("  ✓ #{phase}") end)
+        IO.puts("")
 
-      Enum.each(project.phases, fn phase ->
-        IO.puts("  ✓ #{phase}")
-      end)
-
-      IO.puts("")
+      _ ->
+        :ok
     end
 
     feature_path = Path.join([projects_dir, project.id, "FEATURE.md"])
@@ -209,15 +209,15 @@ defmodule Albedo.CLI.Output do
       IO.puts("  • #{result.total_points} story points estimated")
     end
 
-    if result[:files_to_create] and result[:files_to_create] > 0 do
+    if positive_integer?(result[:files_to_create]) do
       IO.puts("  • #{result.files_to_create} files to create")
     end
 
-    if result[:files_to_modify] and result[:files_to_modify] > 0 do
+    if positive_integer?(result[:files_to_modify]) do
       IO.puts("  • #{result.files_to_modify} files to modify")
     end
 
-    if result[:risks_identified] and result[:risks_identified] > 0 do
+    if positive_integer?(result[:risks_identified]) do
       IO.puts("  • #{result.risks_identified} risks identified")
     end
 
@@ -244,7 +244,7 @@ defmodule Albedo.CLI.Output do
       IO.puts("  • Recommended stack: #{result.recommended_stack}")
     end
 
-    if result[:setup_steps] and result[:setup_steps] > 0 do
+    if positive_integer?(result[:setup_steps]) do
       IO.puts("  • #{result.setup_steps} setup steps")
     end
 
@@ -556,4 +556,7 @@ defmodule Albedo.CLI.Output do
   def format_error(:timeout), do: "Request timed out. Check your network connection."
   def format_error({:http_error, status}), do: "HTTP error: #{status}"
   def format_error(reason), do: inspect(reason)
+
+  defp positive_integer?(value) when is_integer(value) and value > 0, do: true
+  defp positive_integer?(_), do: false
 end

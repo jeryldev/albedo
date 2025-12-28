@@ -82,8 +82,36 @@ defmodule Albedo.TUI do
         state
         |> handle_log_message(message)
         |> run_loop(projects_dir, input_pid)
+
+      {:DOWN, _ref, :process, _pid, reason} ->
+        state
+        |> handle_operation_crash(reason)
+        |> run_loop(projects_dir, input_pid)
     end
   end
+
+  defp handle_operation_crash(state, :normal), do: state
+
+  defp handle_operation_crash(state, reason) do
+    LogHandler.uninstall()
+
+    if state.modal != nil and state.modal_data.phase == :running do
+      state
+      |> State.add_modal_log("")
+      |> State.add_modal_log("Operation crashed: #{format_crash_reason(reason)}")
+      |> State.add_modal_log("Press Enter or Esc to continue")
+      |> State.complete_modal(:failed, %{error: reason})
+    else
+      State.set_message(state, "Background operation crashed")
+    end
+  end
+
+  defp format_crash_reason({:badbool, op, _value}) do
+    "Invalid boolean operation '#{op}' with non-boolean value"
+  end
+
+  defp format_crash_reason(reason) when is_binary(reason), do: reason
+  defp format_crash_reason(reason), do: inspect(reason, limit: 50)
 
   defp start_input_reader do
     parent = self()
@@ -855,16 +883,19 @@ defmodule Albedo.TUI do
       |> State.add_modal_log("Task: #{task}")
       |> State.add_modal_log("")
 
-    spawn_link(fn ->
-      result =
-        Project.start_greenfield(name, task,
-          stream: false,
-          silent: true,
-          progress_pid: parent
-        )
+    pid =
+      spawn(fn ->
+        result =
+          Project.start_greenfield(name, task,
+            stream: false,
+            silent: true,
+            progress_pid: parent
+          )
 
-      send(parent, {:operation_complete, {:plan, result}})
-    end)
+        send(parent, {:operation_complete, {:plan, result}})
+      end)
+
+    Process.monitor(pid)
 
     modal_state
   end
@@ -892,10 +923,13 @@ defmodule Albedo.TUI do
 
     opts = if title != "", do: Keyword.put(opts, :project, title), else: opts
 
-    spawn_link(fn ->
-      result = Project.start(codebase_path, task, opts)
-      send(parent, {:operation_complete, {:analyze, result}})
-    end)
+    pid =
+      spawn(fn ->
+        result = Project.start(codebase_path, task, opts)
+        send(parent, {:operation_complete, {:analyze, result}})
+      end)
+
+    Process.monitor(pid)
 
     modal_state
   end

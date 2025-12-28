@@ -35,12 +35,16 @@ defmodule Albedo.TUI.Renderer do
 
   defp build_frame(%{mode: :modal} = state, width, height) do
     base_lines = for row <- 1..height, do: build_line(row, state, width, height)
-    modal_lines = Modal.build_modal_overlay(state, width, height)
+    modal_data = Modal.build_modal_overlay(state, width, height)
 
     merged =
-      Enum.zip(base_lines, modal_lines)
-      |> Enum.map(fn {base, modal} ->
-        if modal == nil, do: base, else: modal
+      Enum.zip(base_lines, modal_data)
+      |> Enum.map(fn
+        {base, nil} ->
+          base
+
+        {base, {start_col, modal_content}} ->
+          splice_modal_into_line(base, start_col, modal_content, width)
       end)
 
     Enum.intersperse(merged, "\r\n")
@@ -49,6 +53,30 @@ defmodule Albedo.TUI.Renderer do
   defp build_frame(state, width, height) do
     lines = for row <- 1..height, do: build_line(row, state, width, height)
     Enum.intersperse(lines, "\r\n")
+  end
+
+  defp splice_modal_into_line(base, start_col, modal_content, width) do
+    modal_visual_len = String.length(strip_ansi_codes(modal_content))
+
+    left_part = safe_slice_with_ansi(base, 0, start_col)
+    right_start = start_col + modal_visual_len
+    right_part = safe_slice_with_ansi(base, right_start, width - right_start)
+
+    left_part <> modal_content <> right_part
+  end
+
+  defp strip_ansi_codes(str) do
+    Regex.replace(~r/\e\[[0-9;]*m/, str, "")
+  end
+
+  defp safe_slice_with_ansi(_str, _start, len) when len <= 0, do: ""
+
+  defp safe_slice_with_ansi(str, start, len) do
+    colors = Utils.colors()
+    clean = strip_ansi_codes(str)
+    sliced = String.slice(clean, start, len)
+    padded = String.pad_trailing(sliced, len)
+    padded <> colors.reset
   end
 
   defp build_line(row, state, width, height) do

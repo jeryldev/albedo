@@ -23,6 +23,12 @@ defmodule Albedo.TUI.Renderer.ModalTest do
     }
   end
 
+  defp extract_content(result) do
+    result
+    |> Enum.reject(&is_nil/1)
+    |> Enum.map_join("\n", fn {_start_col, content} -> content end)
+  end
+
   describe "build_modal_overlay/3" do
     test "returns list of lines" do
       state = build_modal_state(:plan)
@@ -39,19 +45,23 @@ defmodule Albedo.TUI.Renderer.ModalTest do
       assert Enum.any?(result, &is_nil/1)
     end
 
-    test "includes modal content for rows inside modal" do
+    test "includes modal content tuples for rows inside modal" do
       state = build_modal_state(:plan)
       result = Modal.build_modal_overlay(state, 120, 40)
 
       content_lines = Enum.reject(result, &is_nil/1)
       refute Enum.empty?(content_lines)
+
+      assert Enum.all?(content_lines, fn {start_col, content} ->
+               is_integer(start_col) and is_binary(content)
+             end)
     end
 
     test "shows Plan title for plan modal" do
       state = build_modal_state(:plan)
       result = Modal.build_modal_overlay(state, 120, 40)
 
-      content = Enum.join(Enum.reject(result, &is_nil/1), "\n")
+      content = extract_content(result)
       assert String.contains?(content, "Plan")
     end
 
@@ -59,7 +69,7 @@ defmodule Albedo.TUI.Renderer.ModalTest do
       state = build_modal_state(:analyze)
       result = Modal.build_modal_overlay(state, 120, 40)
 
-      content = Enum.join(Enum.reject(result, &is_nil/1), "\n")
+      content = extract_content(result)
       assert String.contains?(content, "Analyze")
     end
 
@@ -67,7 +77,7 @@ defmodule Albedo.TUI.Renderer.ModalTest do
       state = build_modal_state(:plan, :input)
       result = Modal.build_modal_overlay(state, 120, 40)
 
-      content = Enum.join(Enum.reject(result, &is_nil/1), "\n")
+      content = extract_content(result)
       assert String.contains?(content, "Tab") or String.contains?(content, "Enter")
     end
 
@@ -75,7 +85,7 @@ defmodule Albedo.TUI.Renderer.ModalTest do
       state = build_modal_state(:plan, :running)
       result = Modal.build_modal_overlay(state, 120, 40)
 
-      content = Enum.join(Enum.reject(result, &is_nil/1), "\n")
+      content = extract_content(result)
       assert String.contains?(content, "Running")
     end
 
@@ -83,7 +93,7 @@ defmodule Albedo.TUI.Renderer.ModalTest do
       state = build_modal_state(:plan, :completed)
       result = Modal.build_modal_overlay(state, 120, 40)
 
-      content = Enum.join(Enum.reject(result, &is_nil/1), "\n")
+      content = extract_content(result)
       assert String.contains?(content, "close") or String.contains?(content, "Esc")
     end
 
@@ -99,7 +109,7 @@ defmodule Albedo.TUI.Renderer.ModalTest do
       state = build_modal_state(:plan, :running)
       result = Modal.build_modal_overlay(state, 120, 40)
 
-      content = Enum.join(Enum.reject(result, &is_nil/1), "\n")
+      content = extract_content(result)
       assert String.contains?(content, "test-project")
     end
   end

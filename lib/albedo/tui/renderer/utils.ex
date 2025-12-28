@@ -25,6 +25,7 @@ defmodule Albedo.TUI.Renderer.Utils do
     reset: "\e[0m",
     bold: "\e[1m",
     dim: "\e[2m",
+    reverse: "\e[7m",
     black: "\e[30m",
     red: "\e[31m",
     green: "\e[32m",

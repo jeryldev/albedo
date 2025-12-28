@@ -6,30 +6,46 @@ defmodule Albedo.TUI.Renderer.Detail do
   alias Albedo.TUI.{Renderer.Utils, State}
 
   def build_right_panel_char(panel_row, state, width, height) do
+    is_active = detail_panel_active?(state)
+    border_color = panel_border_color(is_active)
+    title = panel_title(state.mode)
+
+    build_panel_row(panel_row, state, width, height, is_active, border_color, title)
+  end
+
+  defp detail_panel_active?(state) do
+    (state.active_panel == :detail or state.mode == :edit) and state.mode != :modal
+  end
+
+  defp panel_border_color(true), do: Utils.colors().kanagawa_orange
+  defp panel_border_color(false), do: Utils.colors().white
+
+  defp panel_title(:edit), do: " Edit Ticket "
+  defp panel_title(_), do: " [4] Detail "
+
+  defp build_panel_row(row, _state, width, height, _is_active, _border_color, _title)
+       when row <= 0 or row > height do
+    String.duplicate(" ", width)
+  end
+
+  defp build_panel_row(1, _state, width, _height, is_active, border_color, title) do
+    Utils.build_top_border(title, width, border_color, is_active)
+  end
+
+  defp build_panel_row(row, _state, width, height, is_active, border_color, _title)
+       when row == height do
+    Utils.build_bottom_border(width, border_color, is_active)
+  end
+
+  defp build_panel_row(row, state, width, height, is_active, border_color, _title) do
     colors = Utils.colors()
-    is_active = state.active_panel == :detail or state.mode == :edit
     border_chars = Utils.border_chars(is_active)
-    border_color = if is_active, do: colors.kanagawa_orange, else: colors.white
-    title = if state.mode == :edit, do: " Edit Ticket ", else: " [4] Detail "
+    content_row = row - 2
+    content = build_detail_content(content_row, state, width - 2, height - 2)
 
-    cond do
-      panel_row <= 0 or panel_row > height ->
-        String.duplicate(" ", width)
-
-      panel_row == 1 ->
-        Utils.build_top_border(title, width, border_color, is_active)
-
-      panel_row == height ->
-        Utils.build_bottom_border(width, border_color, is_active)
-
-      true ->
-        content_row = panel_row - 2
-        content = build_detail_content(content_row, state, width - 2, height - 2)
-
-        border_color <>
-          border_chars.vertical <>
-          colors.reset <> content <> border_color <> border_chars.vertical <> colors.reset
-    end
+    border_color <>
+      border_chars.vertical <>
+      colors.reset <> content <> border_color <> border_chars.vertical <> colors.reset
   end
 
   defp build_detail_content(row, state, width, height) do
@@ -125,8 +141,10 @@ defmodule Albedo.TUI.Renderer.Detail do
     end
   end
 
+  @value_indent "  "
+
   defp build_field_input_line(state, ticket, field, width, is_active) do
-    colors = Utils.colors()
+    indent_len = String.length(@value_indent)
 
     value =
       if is_active do
@@ -136,19 +154,19 @@ defmodule Albedo.TUI.Renderer.Detail do
       end
 
     if is_active do
-      build_input_field_line(value, state.edit_cursor, width)
+      build_input_field_line(value, state.edit_cursor, width, indent_len)
     else
-      colors.dim <>
-        "│ " <> colors.reset <> String.pad_trailing(String.slice(value, 0, width - 3), width - 2)
+      @value_indent <>
+        String.pad_trailing(String.slice(value, 0, width - indent_len), width - indent_len)
     end
   end
 
-  defp build_input_field_line(value, cursor, width) do
+  defp build_input_field_line(value, cursor, width, indent_len) do
     colors = Utils.colors()
     cursor = min(cursor, String.length(value))
     {before, after_cursor} = String.split_at(value, cursor)
 
-    max_visible = width - 3
+    max_visible = width - indent_len
     visible_before = String.slice(before, -max(0, max_visible - 1), max_visible - 1)
     cursor_char = if after_cursor == "", do: " ", else: String.first(after_cursor)
 
@@ -159,13 +177,11 @@ defmodule Albedo.TUI.Renderer.Detail do
     visible_after = String.slice(after_char, 0, max(0, remaining))
 
     content =
-      colors.bg_blue <>
-        "▎" <>
-        colors.reset <>
+      @value_indent <>
         visible_before <>
-        colors.bg_cyan <> cursor_char <> colors.reset <> visible_after
+        colors.reverse <> cursor_char <> colors.reset <> visible_after
 
-    used = String.length(visible_before) + 1 + String.length(visible_after) + 2
+    used = indent_len + String.length(visible_before) + 1 + String.length(visible_after)
     padding = max(0, width - used)
 
     content <> String.duplicate(" ", padding)

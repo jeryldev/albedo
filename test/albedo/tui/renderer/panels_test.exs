@@ -6,6 +6,7 @@ defmodule Albedo.TUI.Renderer.PanelsTest do
   defp build_state(opts \\ []) do
     %{
       active_panel: opts[:active_panel] || :projects,
+      mode: opts[:mode] || :normal,
       projects: opts[:projects] || [],
       current_project: opts[:current_project] || 0,
       data: opts[:data],

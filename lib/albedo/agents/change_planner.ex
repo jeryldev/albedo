@@ -163,27 +163,9 @@ defmodule Albedo.Agents.ChangePlanner do
   defp format_summary_section(nil), do: ""
 
   defp format_summary_section(summary) do
-    domain_context =
-      if summary.domain_context and summary.domain_context != [] do
-        "## Domain Context\n" <>
-          Enum.map_join(summary.domain_context, "\n", &"- #{&1}")
-      else
-        ""
-      end
-
-    in_scope =
-      if summary.in_scope and summary.in_scope != [] do
-        "### In Scope\n" <> Enum.map_join(summary.in_scope, "\n", &"- #{&1}")
-      else
-        ""
-      end
-
-    out_of_scope =
-      if summary.out_of_scope and summary.out_of_scope != [] do
-        "### Out of Scope\n" <> Enum.map_join(summary.out_of_scope, "\n", &"- #{&1}")
-      else
-        ""
-      end
+    domain_context = format_list_section("## Domain Context", summary.domain_context)
+    in_scope = format_list_section("### In Scope", summary.in_scope)
+    out_of_scope = format_list_section("### Out of Scope", summary.out_of_scope)
 
     """
     # Feature: #{summary.title || "Untitled"}
@@ -199,6 +181,12 @@ defmodule Albedo.Agents.ChangePlanner do
 
     #{out_of_scope}
     """
+  end
+
+  defp format_list_section(_header, list) when not is_list(list) or list == [], do: ""
+
+  defp format_list_section(header, list) do
+    header <> "\n" <> Enum.map_join(list, "\n", &"- #{&1}")
   end
 
   defp format_overview_section(nil), do: ""

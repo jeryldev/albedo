@@ -5,6 +5,13 @@ defmodule Albedo.TUI.Renderer.Modal do
 
   alias Albedo.TUI.Renderer.Utils
 
+  @value_indent "  "
+
+  @doc """
+  Builds modal overlay data as a list of `{start_col, modal_content}` tuples or `nil`.
+  This allows the renderer to splice the modal content over the base content,
+  preserving the underlying panels on the sides.
+  """
   def build_modal_overlay(state, width, height) do
     modal_width = min(100, width - 4)
     modal_height = min(height - 4, 30)
@@ -18,29 +25,28 @@ defmodule Albedo.TUI.Renderer.Modal do
           nil
 
         row == start_row ->
-          build_modal_top_border(state, modal_width, start_col, width)
+          {start_col, build_modal_top_border(state, modal_width)}
 
         row == end_row ->
-          build_modal_bottom_border(state, modal_width, start_col, width)
+          {start_col, build_modal_bottom_border(state, modal_width)}
 
         true ->
           content_row = row - start_row - 1
 
-          build_modal_content_line(
-            state,
-            content_row,
-            modal_width,
-            modal_height - 2,
-            start_col,
-            width
-          )
+          {start_col,
+           build_modal_content_line(
+             state,
+             content_row,
+             modal_width,
+             modal_height - 2
+           )}
       end
     end
   end
 
-  defp build_modal_top_border(state, modal_width, start_col, total_width) do
+  defp build_modal_top_border(state, modal_width) do
     colors = Utils.colors()
-    border_chars = Utils.border_chars()
+    border_chars = Utils.border_chars_heavy()
     type_label = if state.modal == :plan, do: "Plan New Project", else: "Analyze Codebase"
 
     title =
@@ -56,27 +62,22 @@ defmodule Albedo.TUI.Renderer.Modal do
     left_bar = div(bar_width - title_len, 2)
     right_bar = bar_width - title_len - left_bar
 
-    border =
+    colors.kanagawa_orange <>
+      border_chars.top_left <>
+      String.duplicate(border_chars.horizontal, left_bar) <>
+      colors.bold <>
       colors.green <>
-        border_chars.top_left <>
-        String.duplicate(border_chars.horizontal, left_bar) <>
-        colors.bold <>
-        colors.white <>
-        title <>
-        colors.reset <>
-        colors.green <>
-        String.duplicate(border_chars.horizontal, right_bar) <>
-        border_chars.top_right <>
-        colors.reset
-
-    left_pad = String.duplicate(" ", start_col)
-    right_pad = String.duplicate(" ", max(0, total_width - start_col - modal_width))
-    left_pad <> border <> right_pad
+      title <>
+      colors.reset <>
+      colors.kanagawa_orange <>
+      String.duplicate(border_chars.horizontal, right_bar) <>
+      border_chars.top_right <>
+      colors.reset
   end
 
-  defp build_modal_bottom_border(state, modal_width, start_col, total_width) do
+  defp build_modal_bottom_border(state, modal_width) do
     colors = Utils.colors()
-    border_chars = Utils.border_chars()
+    border_chars = Utils.border_chars_heavy()
 
     hint =
       case state.modal_data.phase do
@@ -92,41 +93,29 @@ defmodule Albedo.TUI.Renderer.Modal do
     left_bar = div(bar_width - hint_len, 2)
     right_bar = bar_width - hint_len - left_bar
 
-    status_color =
+    hint_color =
       case state.modal_data.phase do
-        :input -> colors.green
-        :running -> colors.yellow
-        :completed -> colors.green
-        :failed -> colors.red
+        :input -> colors.bold <> colors.green
+        :running -> colors.bold <> colors.yellow
+        :completed -> colors.bold <> colors.green
+        :failed -> colors.bold <> colors.red
       end
 
-    border =
-      colors.green <>
-        border_chars.bottom_left <>
-        String.duplicate(border_chars.horizontal, left_bar) <>
-        status_color <>
-        hint <>
-        colors.reset <>
-        colors.green <>
-        String.duplicate(border_chars.horizontal, right_bar) <>
-        border_chars.bottom_right <>
-        colors.reset
-
-    left_pad = String.duplicate(" ", start_col)
-    right_pad = String.duplicate(" ", max(0, total_width - start_col - modal_width))
-    left_pad <> border <> right_pad
+    colors.kanagawa_orange <>
+      border_chars.bottom_left <>
+      String.duplicate(border_chars.horizontal, left_bar) <>
+      hint_color <>
+      hint <>
+      colors.reset <>
+      colors.kanagawa_orange <>
+      String.duplicate(border_chars.horizontal, right_bar) <>
+      border_chars.bottom_right <>
+      colors.reset
   end
 
-  defp build_modal_content_line(
-         state,
-         content_row,
-         modal_width,
-         content_height,
-         start_col,
-         total_width
-       ) do
+  defp build_modal_content_line(state, content_row, modal_width, content_height) do
     colors = Utils.colors()
-    border_chars = Utils.border_chars()
+    border_chars = Utils.border_chars_heavy()
     inner_width = modal_width - 4
     content_lines = build_modal_all_content(state, inner_width, content_height)
     content = Enum.at(content_lines, content_row) || ""
@@ -134,20 +123,15 @@ defmodule Albedo.TUI.Renderer.Modal do
     padded_content =
       String.pad_trailing(content, inner_width + Utils.color_escape_length(content))
 
-    line =
-      colors.green <>
-        border_chars.vertical <>
-        colors.reset <>
-        " " <>
-        padded_content <>
-        " " <>
-        colors.green <>
-        border_chars.vertical <>
-        colors.reset
-
-    left_pad = String.duplicate(" ", start_col)
-    right_pad = String.duplicate(" ", max(0, total_width - start_col - modal_width))
-    left_pad <> line <> right_pad
+    colors.kanagawa_orange <>
+      border_chars.vertical <>
+      colors.reset <>
+      " " <>
+      padded_content <>
+      " " <>
+      colors.kanagawa_orange <>
+      border_chars.vertical <>
+      colors.reset
   end
 
   defp build_modal_all_content(state, width, max_lines) do
@@ -242,7 +226,8 @@ defmodule Albedo.TUI.Renderer.Modal do
 
   defp build_multiline_field(lines, cursor, width, true = _is_active) do
     total_text = Enum.join(lines, "")
-    line_width = width - 3
+    indent_len = String.length(@value_indent)
+    line_width = width - indent_len
     cursor = min(cursor, String.length(total_text))
 
     cursor_line_idx = div(cursor, max(1, line_width))
@@ -250,28 +235,28 @@ defmodule Albedo.TUI.Renderer.Modal do
 
     lines
     |> Enum.with_index()
-    |> Enum.map(&render_active_field_line(&1, cursor_line_idx, cursor_in_line, width))
+    |> Enum.map(&render_active_field_line(&1, cursor_line_idx, cursor_in_line, line_width))
+    |> Enum.map(&(@value_indent <> &1))
   end
 
   defp build_multiline_field(lines, _cursor, width, false = _is_active) do
     colors = Utils.colors()
+    indent_len = String.length(@value_indent)
 
     Enum.map(lines, fn line ->
-      colors.dim <> "│ " <> colors.reset <> String.slice(line, 0, width - 3)
+      @value_indent <> colors.dim <> String.slice(line, 0, width - indent_len) <> colors.reset
     end)
   end
 
-  defp render_active_field_line({line, idx}, cursor_line_idx, cursor_in_line, width) do
-    colors = Utils.colors()
-
+  defp render_active_field_line({line, idx}, cursor_line_idx, cursor_in_line, _width) do
     if idx == cursor_line_idx do
-      build_active_field_line_with_cursor(line, cursor_in_line, width)
+      build_active_field_line_with_cursor(line, cursor_in_line)
     else
-      colors.bg_blue <> "▎" <> colors.reset <> line
+      line
     end
   end
 
-  defp build_active_field_line_with_cursor(line, cursor_pos, _width) do
+  defp build_active_field_line_with_cursor(line, cursor_pos) do
     colors = Utils.colors()
     cursor_pos = min(cursor_pos, String.length(line))
     {before, after_cursor} = String.split_at(line, cursor_pos)
@@ -281,11 +266,7 @@ defmodule Albedo.TUI.Renderer.Modal do
     after_char =
       if String.length(after_cursor) > 1, do: String.slice(after_cursor, 1..-1//1), else: ""
 
-    colors.bg_blue <>
-      "▎" <>
-      colors.reset <>
-      before <>
-      colors.bg_cyan <> cursor_char <> colors.reset <> after_char
+    before <> colors.reverse <> cursor_char <> colors.reset <> after_char
   end
 
   defp build_log_header(data, _scroll) do
