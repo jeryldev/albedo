@@ -46,29 +46,35 @@ defmodule Albedo.TUI.Renderer.Utils do
   def build_top_border(title, width, border_color, is_active) do
     colors = @colors
     chars = if is_active, do: @border_chars_heavy, else: @border_chars
-    title_color = if is_active, do: colors.bold <> colors.green, else: colors.white
+    title_color = if is_active, do: [colors.bold, colors.green], else: colors.white
     bar_width = width - 2
     title_len = String.length(title)
     left_bar = div(bar_width - title_len, 2)
     right_bar = bar_width - title_len - left_bar
 
-    border_color <>
-      chars.top_left <>
-      String.duplicate(chars.horizontal, left_bar) <>
-      title_color <>
-      title <>
-      border_color <>
-      String.duplicate(chars.horizontal, right_bar) <>
-      chars.top_right <> colors.reset
+    :erlang.iolist_to_binary([
+      border_color,
+      chars.top_left,
+      String.duplicate(chars.horizontal, left_bar),
+      title_color,
+      title,
+      border_color,
+      String.duplicate(chars.horizontal, right_bar),
+      chars.top_right,
+      colors.reset
+    ])
   end
 
   def build_bottom_border(width, border_color, is_active \\ false) do
     chars = if is_active, do: @border_chars_heavy, else: @border_chars
 
-    border_color <>
-      chars.bottom_left <>
-      String.duplicate(chars.horizontal, width - 2) <>
-      chars.bottom_right <> @colors.reset
+    :erlang.iolist_to_binary([
+      border_color,
+      chars.bottom_left,
+      String.duplicate(chars.horizontal, width - 2),
+      chars.bottom_right,
+      @colors.reset
+    ])
   end
 
   def wrap_text(text, width) when is_binary(text) and width > 0 do

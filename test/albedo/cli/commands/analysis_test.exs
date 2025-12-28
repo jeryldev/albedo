@@ -133,12 +133,14 @@ defmodule Albedo.CLI.Commands.AnalysisTest do
 
   describe "init/0" do
     test "init function is defined" do
+      Code.ensure_loaded!(Analysis)
       assert function_exported?(Analysis, :init, 0)
     end
   end
 
   describe "module functions" do
     test "defines expected public functions" do
+      Code.ensure_loaded!(Analysis)
       assert function_exported?(Analysis, :analyze, 2)
       assert function_exported?(Analysis, :resume, 1)
       assert function_exported?(Analysis, :replan, 2)

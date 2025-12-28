@@ -44,9 +44,15 @@ defmodule Albedo.TUI.Renderer.Panels do
         content_row = row - 2
         content = build_project_content(content_row, state, width - 2)
 
-        border_color <>
-          border_chars.vertical <>
-          colors.reset <> content <> border_color <> border_chars.vertical <> colors.reset
+        :erlang.iolist_to_binary([
+          border_color,
+          border_chars.vertical,
+          colors.reset,
+          content,
+          border_color,
+          border_chars.vertical,
+          colors.reset
+        ])
     end
   end
 
@@ -66,11 +72,18 @@ defmodule Albedo.TUI.Renderer.Panels do
 
   defp build_project_item(project, width, is_selected, _is_active) do
     colors = Utils.colors()
-    bg = if is_selected, do: colors.bg_kanagawa_sky_blue <> colors.black, else: ""
+    bg = if is_selected, do: [colors.bg_kanagawa_sky_blue, colors.black], else: []
     state_indicator = Utils.project_state_indicator(project.state)
     id = String.slice(project.id, 0, width - 4)
 
-    bg <> " " <> state_indicator <> " " <> String.pad_trailing(id, width - 3) <> colors.reset
+    :erlang.iolist_to_binary([
+      bg,
+      " ",
+      state_indicator,
+      " ",
+      String.pad_trailing(id, width - 3),
+      colors.reset
+    ])
   end
 
   defp build_tickets_line(row, state, width, height) do
@@ -90,9 +103,15 @@ defmodule Albedo.TUI.Renderer.Panels do
         content_row = row - 2
         content = build_ticket_content(content_row, state, width - 2)
 
-        border_color <>
-          border_chars.vertical <>
-          colors.reset <> content <> border_color <> border_chars.vertical <> colors.reset
+        :erlang.iolist_to_binary([
+          border_color,
+          border_chars.vertical,
+          colors.reset,
+          content,
+          border_color,
+          border_chars.vertical,
+          colors.reset
+        ])
     end
   end
 
@@ -115,7 +134,7 @@ defmodule Albedo.TUI.Renderer.Panels do
     else
       if row == 0 do
         msg = "No project selected"
-        colors.dim <> String.pad_trailing(msg, width) <> colors.reset
+        :erlang.iolist_to_binary([colors.dim, String.pad_trailing(msg, width), colors.reset])
       else
         String.duplicate(" ", width)
       end
@@ -125,17 +144,17 @@ defmodule Albedo.TUI.Renderer.Panels do
   defp build_ticket_item(ticket, width, is_selected, is_active, is_viewing) do
     colors = Utils.colors()
     show_highlight = is_selected and (is_active or is_viewing)
-    bg = if show_highlight, do: colors.bg_kanagawa_sky_blue <> colors.black, else: ""
+    bg = if show_highlight, do: [colors.bg_kanagawa_sky_blue, colors.black], else: []
     status_ind = Utils.status_indicator(ticket.status)
 
-    points = if ticket.estimate, do: " [#{ticket.estimate}]", else: ""
-    points_len = String.length(points)
+    points = if ticket.estimate, do: [" [", to_string(ticket.estimate), "]"], else: []
+    points_len = if ticket.estimate, do: 3 + String.length(to_string(ticket.estimate)), else: 0
     prefix_len = 3
     title_width = max(0, width - prefix_len - points_len)
     ticket_title = ticket.title || "(untitled)"
     title = String.pad_trailing(String.slice(ticket_title, 0, title_width), title_width)
 
-    bg <> " " <> status_ind <> " " <> title <> points <> colors.reset
+    :erlang.iolist_to_binary([bg, " ", status_ind, " ", title, points, colors.reset])
   end
 
   defp build_research_line(row, state, width, height) do
@@ -155,9 +174,15 @@ defmodule Albedo.TUI.Renderer.Panels do
         content_row = row - 2
         content = build_research_content(content_row, state, width - 2)
 
-        border_color <>
-          border_chars.vertical <>
-          colors.reset <> content <> border_color <> border_chars.vertical <> colors.reset
+        :erlang.iolist_to_binary([
+          border_color,
+          border_chars.vertical,
+          colors.reset,
+          content,
+          border_color,
+          border_chars.vertical,
+          colors.reset
+        ])
     end
   end
 
@@ -184,7 +209,7 @@ defmodule Albedo.TUI.Renderer.Panels do
   defp build_empty_research_message(0, state, width) do
     colors = Utils.colors()
     msg = if state.data, do: "No research files", else: "Select a project"
-    colors.dim <> String.pad_trailing(msg, width) <> colors.reset
+    :erlang.iolist_to_binary([colors.dim, String.pad_trailing(msg, width), colors.reset])
   end
 
   defp build_empty_research_message(_row, _state, width) do
@@ -194,10 +219,17 @@ defmodule Albedo.TUI.Renderer.Panels do
   defp build_research_item(file, width, is_selected, is_active, is_viewing) do
     colors = Utils.colors()
     show_highlight = is_selected and (is_active or is_viewing)
-    bg = if show_highlight, do: colors.bg_kanagawa_sky_blue <> colors.black, else: ""
+    bg = if show_highlight, do: [colors.bg_kanagawa_sky_blue, colors.black], else: []
     type_indicator = if file.type == :markdown, do: "md", else: "js"
     name = String.slice(file.name, 0, width - 5)
 
-    bg <> " " <> type_indicator <> " " <> String.pad_trailing(name, width - 4) <> colors.reset
+    :erlang.iolist_to_binary([
+      bg,
+      " ",
+      type_indicator,
+      " ",
+      String.pad_trailing(name, width - 4),
+      colors.reset
+    ])
   end
 end

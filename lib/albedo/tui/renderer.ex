@@ -67,7 +67,7 @@ defmodule Albedo.TUI.Renderer do
   defp build_status_line(state, width) do
     colors = Utils.colors()
     help_text = mode_help_text(state)
-    colors.dim <> String.pad_trailing(help_text, width) <> colors.reset
+    :erlang.iolist_to_binary([colors.dim, String.pad_trailing(help_text, width), colors.reset])
   end
 
   defp mode_help_text(%{mode: :edit}),
@@ -85,31 +85,45 @@ defmodule Albedo.TUI.Renderer do
 
     {before, after_cursor} = String.split_at(buffer, cursor)
     cursor_char = if after_cursor == "", do: " ", else: String.first(after_cursor)
-    after_cursor = if after_cursor == "", do: "", else: String.slice(after_cursor, 1..-1//1)
+    rest = if after_cursor == "", do: "", else: String.slice(after_cursor, 1..-1//1)
+
+    escape_len =
+      String.length(colors.bg_cyan) + String.length(colors.reset) + String.length(colors.yellow)
 
     input_display =
-      prompt <>
-        before <>
-        colors.bg_cyan <> cursor_char <> colors.reset <> colors.yellow <> after_cursor
+      :erlang.iolist_to_binary([
+        prompt,
+        before,
+        colors.bg_cyan,
+        cursor_char,
+        colors.reset,
+        colors.yellow,
+        rest
+      ])
 
-    colors.yellow <>
-      String.pad_trailing(
-        input_display,
-        width + String.length(colors.bg_cyan) + String.length(colors.reset) +
-          String.length(colors.yellow)
-      ) <> colors.reset
+    :erlang.iolist_to_binary([
+      colors.yellow,
+      String.pad_trailing(input_display, width + escape_len),
+      colors.reset
+    ])
   end
 
   defp build_message_line(%{mode: :confirm} = state, width) do
     colors = Utils.colors()
     msg = state.confirm_message || ""
-    colors.red <> colors.bold <> String.pad_trailing(msg, width) <> colors.reset
+
+    :erlang.iolist_to_binary([
+      colors.red,
+      colors.bold,
+      String.pad_trailing(msg, width),
+      colors.reset
+    ])
   end
 
   defp build_message_line(state, width) do
     colors = Utils.colors()
     msg = state.message || ""
-    colors.yellow <> String.pad_trailing(msg, width) <> colors.reset
+    :erlang.iolist_to_binary([colors.yellow, String.pad_trailing(msg, width), colors.reset])
   end
 
   defp build_panel_line(row, state, width, height) do

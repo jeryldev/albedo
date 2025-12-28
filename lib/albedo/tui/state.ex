@@ -109,6 +109,12 @@ defmodule Albedo.TUI.State do
           modal_task_ref: reference() | nil
         }
 
+  @doc """
+  Creates a new TUI state with default values.
+
+  ## Options
+    * `:project_dir` - Initial project directory path
+  """
   def new(opts \\ []) do
     %__MODULE__{
       project_dir: opts[:project_dir],
@@ -147,6 +153,10 @@ defmodule Albedo.TUI.State do
 
   defdelegate editable_fields, to: Editing
 
+  @doc """
+  Loads available projects from the given directory.
+  Returns state with projects list populated and sorted by creation date.
+  """
   def load_projects(%__MODULE__{} = state, projects_dir) do
     projects =
       case File.ls(projects_dir) do
@@ -208,6 +218,10 @@ defmodule Albedo.TUI.State do
     end
   end
 
+  @doc """
+  Loads tickets and research files from a project directory.
+  Returns `{:ok, state}` on success or `{:error, reason}` on failure.
+  """
   def load_tickets(%__MODULE__{} = state, project_dir) do
     case Tickets.load(project_dir) do
       {:ok, data} ->
@@ -231,6 +245,10 @@ defmodule Albedo.TUI.State do
     end
   end
 
+  @doc """
+  Loads a project directory without requiring tickets.json.
+  Used when project has research files but no tickets yet.
+  """
   def load_project_without_tickets(%__MODULE__{} = state, project_dir) do
     files = load_research_files(project_dir)
     project_id = Path.basename(project_dir)
@@ -284,10 +302,12 @@ defmodule Albedo.TUI.State do
     end
   end
 
+  @doc "Returns the currently selected project or nil."
   def current_project(%__MODULE__{projects: projects, current_project: idx}) do
     Enum.at(projects, idx)
   end
 
+  @doc "Returns the currently selected ticket or nil."
   def current_ticket(%__MODULE__{data: nil}), do: nil
   def current_ticket(%__MODULE__{selected_ticket: nil}), do: nil
 
@@ -295,6 +315,7 @@ defmodule Albedo.TUI.State do
     Enum.at(data.tickets, idx)
   end
 
+  @doc "Returns the currently selected research file or nil."
   def current_research_file(%__MODULE__{research_files: []}), do: nil
   def current_research_file(%__MODULE__{selected_file: nil}), do: nil
 
@@ -302,18 +323,21 @@ defmodule Albedo.TUI.State do
     Enum.at(files, idx)
   end
 
+  @doc "Sets the selected ticket as viewed and switches detail panel to ticket view."
   def view_current_ticket(%__MODULE__{selected_ticket: nil} = state), do: state
 
   def view_current_ticket(%__MODULE__{selected_ticket: idx} = state) do
     %{state | viewed_ticket: idx, detail_content: :ticket, detail_scroll: 0}
   end
 
+  @doc "Sets the selected research file as viewed and switches detail panel to research view."
   def view_current_file(%__MODULE__{selected_file: nil} = state), do: state
 
   def view_current_file(%__MODULE__{selected_file: idx} = state) do
     %{state | viewed_file: idx, detail_content: :research, detail_scroll: 0}
   end
 
+  @doc "Moves selection up in the active panel or scrolls up in detail view."
   def move_up(%__MODULE__{active_panel: :projects} = state) do
     new_idx = max(0, state.current_project - 1)
 
@@ -349,6 +373,7 @@ defmodule Albedo.TUI.State do
     %{state | detail_scroll: new_scroll}
   end
 
+  @doc "Moves selection down in the active panel or scrolls down in detail view."
   def move_down(%__MODULE__{active_panel: :projects, projects: projects} = state) do
     max_idx = max(0, length(projects) - 1)
     new_idx = min(max_idx, state.current_project + 1)
@@ -391,6 +416,7 @@ defmodule Albedo.TUI.State do
     %{state | detail_scroll: state.detail_scroll + 1}
   end
 
+  @doc "Cycles to the next panel: projects → tickets → research → detail → projects."
   def next_panel(%__MODULE__{active_panel: :projects} = state) do
     state
     |> sync_project_selection()
@@ -416,6 +442,7 @@ defmodule Albedo.TUI.State do
     |> sync_project_selection()
   end
 
+  @doc "Cycles to the previous panel: projects → detail → research → tickets → projects."
   def prev_panel(%__MODULE__{active_panel: :projects} = state) do
     state
     |> sync_project_selection()
@@ -505,14 +532,17 @@ defmodule Albedo.TUI.State do
 
   defp maybe_select_first_file(state), do: state
 
+  @doc "Resets the detail panel scroll position to the top."
   def reset_detail_scroll(%__MODULE__{} = state) do
     %{state | detail_scroll: 0}
   end
 
+  @doc "Sets the status bar message displayed at the bottom of the TUI."
   def set_message(%__MODULE__{} = state, message) do
     %{state | message: message}
   end
 
+  @doc "Sets quit flag to true, signaling the TUI should exit."
   def quit(%__MODULE__{} = state) do
     %{state | quit: true}
   end
@@ -539,12 +569,14 @@ defmodule Albedo.TUI.State do
   defdelegate enter_confirm_mode(state, action, message), to: Editing
   defdelegate exit_confirm_mode(state), to: Editing
 
+  @doc "Removes the current project from the projects list and adjusts selection."
   def delete_project(%__MODULE__{projects: projects, current_project: idx} = state) do
     updated_projects = List.delete_at(projects, idx)
     new_idx = min(idx, max(0, length(updated_projects) - 1))
     %{state | projects: updated_projects, current_project: new_idx}
   end
 
+  @doc "Updates the task description of the current project (truncated to 50 chars)."
   def update_project_task(%__MODULE__{projects: projects, current_project: idx} = state, new_task) do
     updated_projects =
       List.update_at(projects, idx, fn project ->
@@ -554,10 +586,12 @@ defmodule Albedo.TUI.State do
     %{state | projects: updated_projects}
   end
 
+  @doc "Enters help mode to display keyboard shortcuts overlay."
   def enter_help_mode(%__MODULE__{} = state) do
     %{state | mode: :help}
   end
 
+  @doc "Exits help mode and returns to normal mode."
   def exit_help_mode(%__MODULE__{} = state) do
     %{state | mode: :normal}
   end
