@@ -136,8 +136,8 @@ defmodule Albedo.TUI.Renderer do
 
     panel_row = row - panel_start + 1
 
-    left_content =
-      Panels.build_left_panel_char(panel_row, state, left_width, section_height, panel_height)
+    dimensions = %{width: left_width, section_height: section_height, panel_height: panel_height}
+    left_content = Panels.build_left_panel_row(panel_row, state, dimensions)
 
     right_content = Detail.build_right_panel_char(panel_row, state, right_width, panel_height)
 

@@ -5,7 +5,21 @@ defmodule Albedo.TUI.Renderer.Panels do
 
   alias Albedo.TUI.Renderer.Utils
 
-  def build_left_panel_char(panel_row, state, width, section_height, panel_height) do
+  @type dimensions :: %{
+          width: non_neg_integer(),
+          section_height: non_neg_integer(),
+          panel_height: non_neg_integer()
+        }
+
+  @doc """
+  Build a single row of the left panel content.
+
+  Takes `panel_row` (1-indexed), the TUI state, and a dimensions map with
+  `:width`, `:section_height`, and `:panel_height` keys.
+  """
+  @spec build_left_panel_row(non_neg_integer(), map(), dimensions()) :: binary()
+  def build_left_panel_row(panel_row, state, dimensions) do
+    %{width: width, section_height: section_height, panel_height: panel_height} = dimensions
     projects_height = section_height
     tickets_height = section_height
     research_height = panel_height - projects_height - tickets_height

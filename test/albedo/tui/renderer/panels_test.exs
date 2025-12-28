@@ -21,38 +21,42 @@ defmodule Albedo.TUI.Renderer.PanelsTest do
     %{id: id, state: state}
   end
 
-  describe "build_left_panel_char/5" do
+  defp dims(width \\ 40, section_height \\ 10, panel_height \\ 30) do
+    %{width: width, section_height: section_height, panel_height: panel_height}
+  end
+
+  describe "build_left_panel_row/3" do
     test "returns string for valid row" do
       state = build_state()
-      result = Panels.build_left_panel_char(1, state, 40, 10, 30)
+      result = Panels.build_left_panel_row(1, state, dims())
 
       assert is_binary(result)
     end
 
     test "returns spaces for out of range row" do
       state = build_state()
-      result = Panels.build_left_panel_char(0, state, 40, 10, 30)
+      result = Panels.build_left_panel_row(0, state, dims())
 
       assert String.trim(result) == ""
     end
 
     test "returns spaces for row beyond panel height" do
       state = build_state()
-      result = Panels.build_left_panel_char(100, state, 40, 10, 30)
+      result = Panels.build_left_panel_row(100, state, dims())
 
       assert String.trim(result) == ""
     end
 
     test "builds projects section for first section rows" do
       state = build_state(active_panel: :projects)
-      result = Panels.build_left_panel_char(1, state, 40, 10, 30)
+      result = Panels.build_left_panel_row(1, state, dims())
 
       assert String.contains?(result, "Projects")
     end
 
     test "builds tickets section for middle rows" do
       state = build_state(active_panel: :tickets)
-      result = Panels.build_left_panel_char(11, state, 40, 10, 30)
+      result = Panels.build_left_panel_row(11, state, dims())
 
       assert String.contains?(result, "Tickets")
     end
@@ -63,7 +67,7 @@ defmodule Albedo.TUI.Renderer.PanelsTest do
 
       content_found =
         Enum.any?(2..9, fn row ->
-          result = Panels.build_left_panel_char(row, state, 40, 10, 30)
+          result = Panels.build_left_panel_row(row, state, dims())
           String.contains?(result, "my-project")
         end)
 
@@ -76,7 +80,7 @@ defmodule Albedo.TUI.Renderer.PanelsTest do
 
       indicator_found =
         Enum.any?(2..9, fn row ->
-          result = Panels.build_left_panel_char(row, state, 40, 10, 30)
+          result = Panels.build_left_panel_row(row, state, dims())
           String.contains?(result, "✓")
         end)
 
@@ -85,14 +89,14 @@ defmodule Albedo.TUI.Renderer.PanelsTest do
 
     test "uses heavy borders for active panel" do
       state = build_state(active_panel: :projects)
-      result = Panels.build_left_panel_char(1, state, 40, 10, 30)
+      result = Panels.build_left_panel_row(1, state, dims())
 
       assert String.contains?(result, "━") or String.contains?(result, "┏")
     end
 
     test "uses light borders for inactive panel" do
       state = build_state(active_panel: :tickets)
-      result = Panels.build_left_panel_char(1, state, 40, 10, 30)
+      result = Panels.build_left_panel_row(1, state, dims())
 
       assert String.contains?(result, "─") or String.contains?(result, "┌")
     end
@@ -101,7 +105,7 @@ defmodule Albedo.TUI.Renderer.PanelsTest do
   describe "projects section" do
     test "shows empty space when no projects" do
       state = build_state(projects: [])
-      result = Panels.build_left_panel_char(3, state, 40, 10, 30)
+      result = Panels.build_left_panel_row(3, state, dims())
 
       assert is_binary(result)
     end
@@ -112,7 +116,7 @@ defmodule Albedo.TUI.Renderer.PanelsTest do
 
       project_found =
         Enum.any?(2..9, fn row ->
-          result = Panels.build_left_panel_char(row, state, 40, 10, 30)
+          result = Panels.build_left_panel_row(row, state, dims())
           String.contains?(result, "proj1")
         end)
 
@@ -125,7 +129,7 @@ defmodule Albedo.TUI.Renderer.PanelsTest do
 
       all_content =
         Enum.map_join(2..9, "\n", fn row ->
-          Panels.build_left_panel_char(row, state, 40, 10, 30)
+          Panels.build_left_panel_row(row, state, dims())
         end)
 
       assert String.contains?(all_content, "proj1")
@@ -138,7 +142,7 @@ defmodule Albedo.TUI.Renderer.PanelsTest do
       state = build_state()
       section_height = 10
 
-      border_row = Panels.build_left_panel_char(section_height, state, 40, section_height, 30)
+      border_row = Panels.build_left_panel_row(section_height, state, dims(40, section_height, 30))
 
       assert String.contains?(border_row, "└") or String.contains?(border_row, "┗")
     end
@@ -148,7 +152,7 @@ defmodule Albedo.TUI.Renderer.PanelsTest do
       section_height = 10
 
       tickets_row =
-        Panels.build_left_panel_char(section_height + 1, state, 40, section_height, 30)
+        Panels.build_left_panel_row(section_height + 1, state, dims(40, section_height, 30))
 
       assert String.contains?(tickets_row, "Tickets")
     end
@@ -162,7 +166,7 @@ defmodule Albedo.TUI.Renderer.PanelsTest do
 
       all_content =
         Enum.map_join(12..19, "\n", fn row ->
-          Panels.build_left_panel_char(row, state, 40, 10, 30)
+          Panels.build_left_panel_row(row, state, dims())
         end)
 
       assert String.contains?(all_content, "(untitled)")
